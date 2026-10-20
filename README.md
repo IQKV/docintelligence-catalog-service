@@ -17,15 +17,6 @@ This template provides:
 - **Observability** — Micrometer + Prometheus + structured JSON logging (Logstash encoder)
 - **Quality tools** — Checkstyle, JaCoCo, ArchUnit, Husky git hooks, commitlint
 
-## Template Usage
-
-1. Click **[Use this template](https://github.com/IQKV/docintelligence-catalog-service/generate)** to create your repository
-2. Replace all `catalog` / `CatalogService` tokens with your service name (see the token map in `foundation-microservice-project-layout`)
-3. Update `pom.xml` — `artifactId`, `name`, `description`, `start-class`
-4. Rename the Java package from `com.iqkv.docintelligence.catalogservice` to your package
-5. Add your own feature modules — see the `ping` package for the reference layout
-6. Remove unused dependencies from `pom.xml` (e.g. `shedlock` if no scheduled jobs needed)
-
 ## Quick Links
 
 - [API Documentation](./docs/api/README.md)
