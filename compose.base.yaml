@@ -64,17 +64,6 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # MailHog for local email testing
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    container_name: foundation-catalog-mailhog-dev
-    ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # Web UI
-    networks:
-      - catalog-service-network
-    restart: unless-stopped
-
   # MinIO S3-compatible object storage - Local Development
   minio:
     image: pgsty/minio:latest
@@ -171,14 +160,6 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USERNAME: svc_catalog_rmq
       RABBITMQ_PASSWORD: svc_catalog_rmq
-
-      # Mail Configuration (MailHog)
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
-      MAIL_USERNAME: ""
-      MAIL_PASSWORD: ""
-      MAIL_FROM: noreply@iqkv.dev
-      MAIL_REPLY_TO: ""
 
       # Object Storage Configuration (MinIO)
       OBJECTSTORAGE_ENDPOINT: http://minio:9000

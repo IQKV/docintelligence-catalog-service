@@ -11,12 +11,6 @@ services:
       file: compose.base.yaml
       service: rabbitmq-catalog
 
-  # MailHog for local email testing
-  mailhog:
-    extends:
-      file: compose.base.yaml
-      service: mailhog
-
   # MinIO S3-compatible object storage
   minio:
     extends:
