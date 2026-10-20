@@ -88,6 +88,21 @@ iqkv:
       # Controlled via MESSAGING_ENABLED env var; defaults to false for local safety.
       # Helm chart configmap sets this per environment (sit/uat/prd).
       enabled: ${MESSAGING_ENABLED:false}
+  objectstorage:
+    # S3-compatible endpoint — MinIO in SIT/UAT, https://s3.amazonaws.com for AWS S3 in prod.
+    endpoint: ${OBJECTSTORAGE_ENDPOINT:http://localhost:9000}
+    # Public URL used to rewrite presigned URLs returned to external clients.
+    # Leave blank to return presigned URLs unchanged (local dev, AWS S3).
+    public-endpoint: ${OBJECTSTORAGE_PUBLIC_ENDPOINT:}
+    access-key: ${OBJECTSTORAGE_ACCESS_KEY:iqkv}
+    secret-key: ${OBJECTSTORAGE_SECRET_KEY:iqkv_password}
+    bucket-name: ${OBJECTSTORAGE_BUCKET_NAME:catalog-assets}
+    region: ${OBJECTSTORAGE_REGION:us-east-1}
+    ssl: ${OBJECTSTORAGE_SSL:false}
+    upload:
+      max-file-size-bytes: ${OBJECTSTORAGE_UPLOAD_MAX_FILE_SIZE_BYTES:5242880}
+      presigned-url-expiration-minutes: ${OBJECTSTORAGE_UPLOAD_PRESIGNED_URL_EXPIRATION_MINUTES:60}
+      allowed-mime-types: ${OBJECTSTORAGE_UPLOAD_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/webp,image/tiff,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
   platform:
     # Platform-wide operational mode: MULTI_TENANT (default) or SINGLE_TENANT.
     # Must be the same value across all core services (IAM, Billing, CMS, etc.).

@@ -110,6 +110,12 @@
             <artifactId>foundation-entitlement-plan-resolver-mvc</artifactId>
         </dependency>
 
+        <!-- Object Storage: MinIO S3-compatible client -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+        </dependency>
+
         <!-- AI: Spring AI Ollama -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
