@@ -53,7 +53,7 @@
             </column>
             <column name="master_venue_id" type="UUID">
                 <constraints nullable="false" foreignKeyName="fk_master_venue_alias_venue"
-                             references="master_venue(id)" onDelete="CASCADE"/>
+                             references="master_venue(id)" deleteCascade="true"/>
             </column>
             <column name="alias" type="VARCHAR(255)">
                 <constraints nullable="false"/>
@@ -75,7 +75,7 @@
             </column>
             <column name="master_venue_id" type="UUID">
                 <constraints nullable="false" foreignKeyName="fk_master_venue_external_venue"
-                             references="master_venue(id)" onDelete="CASCADE"/>
+                             references="master_venue(id)" deleteCascade="true"/>
             </column>
             <!-- Source provider: tagvenue, cvent, google_places, … -->
             <column name="provider" type="VARCHAR(50)">
