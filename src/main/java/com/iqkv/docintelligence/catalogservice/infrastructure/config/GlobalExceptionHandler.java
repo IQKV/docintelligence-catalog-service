@@ -21,6 +21,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.shared.exception.ResourceNotFoundException;
 import com.iqkv.foundation.entitlement.plan.BillingServiceException;
 import com.iqkv.foundation.entitlement.plan.PlanFeatureNotAvailableException;
 import org.slf4j.Logger;
@@ -163,6 +164,15 @@ public class GlobalExceptionHandler {
     final ProblemDetail pd = problem("about:blank", "Bad Request", 400,
         ex.getMessage(), request);
     return ResponseEntity.badRequest().body(pd);
+  }
+
+  @ExceptionHandler(ResourceNotFoundException.class)
+  public ResponseEntity<ProblemDetail> handleNotFound(final ResourceNotFoundException ex,
+                                                      final HttpServletRequest request) {
+    log.warn("Resource not found: {}", ex.getMessage());
+    final ProblemDetail pd = problem("about:blank", "Not Found", 404,
+        ex.getMessage(), request);
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(pd);
   }
 
   @ExceptionHandler(NoHandlerFoundException.class)

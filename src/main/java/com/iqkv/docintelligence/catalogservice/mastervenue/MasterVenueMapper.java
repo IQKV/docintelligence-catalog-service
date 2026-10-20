@@ -53,4 +53,30 @@ public interface MasterVenueMapper {
    * @return all master venues whose name matches, ordered by name
    */
   List<MasterVenue> findByNameIgnoreCase(@Param("name") String name);
+
+  /**
+   * Keyword and city search over the master venue reference dataset.
+   *
+   * <p>Both filters are optional: a {@code null} or blank value drops that predicate.
+   * The keyword is matched case-insensitively against name, address and city.
+   *
+   * @param search free-text keyword matched against name, address and city; nullable
+   * @param city   exact city filter, compared case-insensitively; nullable
+   * @param limit  maximum number of rows to return
+   * @param offset zero-based row offset
+   * @return matching venues ordered by name
+   */
+  List<MasterVenue> search(@Param("search") String search,
+                           @Param("city") String city,
+                           @Param("limit") int limit,
+                           @Param("offset") int offset);
+
+  /**
+   * Counts the rows {@link #search(String, String, int, int)} would return for the same filters.
+   *
+   * @param search free-text keyword; nullable
+   * @param city   exact city filter; nullable
+   * @return total number of matching venues
+   */
+  long countSearch(@Param("search") String search, @Param("city") String city);
 }
