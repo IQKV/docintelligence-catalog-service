@@ -10,7 +10,7 @@ CREATE SCHEMA IF NOT EXISTS t_demo0001;
 CREATE SCHEMA IF NOT EXISTS t_acme0001;
 
 -- Set default search path
-ALTER DATABASE catalogservice SET search_path TO t_platform, catalogservice, public;
+ALTER DATABASE catalogservice SET search_path TO t_platform, public, catalogservice;
 
 -- Create extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
