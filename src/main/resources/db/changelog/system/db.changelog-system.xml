@@ -9,5 +9,6 @@
          Add <include> entries below in timestamp order. -->
 
     <include file="db/changelog/system/20261013120000-create-shedlock-table.xml"/>
+    <include file="db/changelog/system/20261020120000-create-master-venue.xml"/>
 
 </databaseChangeLog>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Master venue catalog — platform-owned reference dataset in the public schema.
+         Created once for the whole database, never per tenant.
+
+         Geo coordinates are stored as lat/lng numeric rather than PostGIS
+         GEOGRAPHY(POINT, 4326): geo distance is not needed yet and PostGIS is not
+         installed in the Docker or Helm Postgres images. -->
+
+    <changeSet id="20261020120000-create-master-venue" author="iqkv">
+
+        <createTable tableName="master_venue" schemaName="public">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="address" type="TEXT"/>
+            <column name="city" type="VARCHAR(100)"/>
+            <column name="location_lat" type="NUMERIC(9,6)"/>
+            <column name="location_lng" type="NUMERIC(9,6)"/>
+            <!-- Canonical metadata document; _schema_version is mandatory. -->
+            <column name="metadata" type="JSONB" defaultValue="{&quot;_schema_version&quot;:1}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="confidence" type="NUMERIC(3,2)"/>
+            <!-- How the row entered the catalog: platform_seed, admin_import, web_scrape. -->
+            <column name="source" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="master_venue" schemaName="public" indexName="idx_master_venue_city">
+            <column name="city"/>
+        </createIndex>
+        <sql>CREATE INDEX idx_master_venue_name_lower ON public.master_venue (LOWER(name));</sql>
+
+        <createTable tableName="master_venue_alias" schemaName="public">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="master_venue_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="fk_master_venue_alias_venue"
+                             references="master_venue(id)" onDelete="CASCADE"/>
+            </column>
+            <column name="alias" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="master_venue_alias" schemaName="public"
+                     indexName="idx_master_venue_alias_venue">
+            <column name="master_venue_id"/>
+        </createIndex>
+        <sql>CREATE INDEX idx_master_venue_alias_alias_lower ON public.master_venue_alias (LOWER(alias));</sql>
+
+        <createTable tableName="master_venue_external" schemaName="public">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="master_venue_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="fk_master_venue_external_venue"
+                             references="master_venue(id)" onDelete="CASCADE"/>
+            </column>
+            <!-- Source provider: tagvenue, cvent, google_places, … -->
+            <column name="provider" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_external_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="raw_payload" type="JSONB"/>
+            <column name="confidence" type="NUMERIC(3,2)"/>
+            <column name="crawled_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="master_venue_external" schemaName="public"
+                     indexName="idx_master_venue_external_venue">
+            <column name="master_venue_id"/>
+        </createIndex>
+        <createIndex tableName="master_venue_external" schemaName="public"
+                     indexName="idx_master_venue_external_provider">
+            <column name="provider"/>
+            <column name="provider_external_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="master_venue_external" schemaName="public"/>
+            <dropTable tableName="master_venue_alias" schemaName="public"/>
+            <dropTable tableName="master_venue" schemaName="public"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
