@@ -19,7 +19,7 @@ package com.iqkv.docintelligence.catalogservice.infrastructure.config;
 import java.util.UUID;
 import javax.sql.DataSource;
 
-import com.iqkv.docintelligence.catalogservice.infrastructure.mybatis.UuidTypeHandler;
+import com.iqkv.foundation.mybatis.util.UuidTypeHandler;
 import com.iqkv.foundation.tenancy.MyBatisSchemaInterceptor;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -35,7 +35,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 @Configuration
 @MapperScan(
     basePackages = {
-        "com.iqkv.docintelligence.catalogservice.mastervenue"
+        "com.iqkv.docintelligence.venue"
     },
     annotationClass = Mapper.class
 )
@@ -47,7 +47,7 @@ public class MyBatisConfig {
     factory.setDataSource(dataSource);
     factory.setMapperLocations(
         new PathMatchingResourcePatternResolver()
-            .getResources("classpath:mappers/**/*.xml")
+            .getResources("classpath*:mappers/**/*.xml")
     );
 
     final org.apache.ibatis.session.Configuration config =

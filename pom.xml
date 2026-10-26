@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.iqkv</groupId>
         <artifactId>boot-parent-pom</artifactId>
-        <version>0.24.34</version>
+        <version>0.24.38</version>
     </parent>
     <groupId>com.iqkv</groupId>
     <artifactId>docintelligence-catalog-service</artifactId>
@@ -108,6 +108,16 @@
         <dependency>
             <groupId>com.iqkv</groupId>
             <artifactId>foundation-entitlement-plan-resolver-mvc</artifactId>
+        </dependency>
+
+        <!-- Shared venue domain model and MyBatis mapper -->
+        <dependency>
+            <groupId>com.iqkv</groupId>
+            <artifactId>docintelligence-venue</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.iqkv</groupId>
+            <artifactId>foundation-mybatis-util</artifactId>
         </dependency>
 
         <!-- Object Storage: MinIO S3-compatible client -->

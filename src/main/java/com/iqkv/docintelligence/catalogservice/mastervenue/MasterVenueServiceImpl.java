@@ -20,6 +20,8 @@ import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtoMapper;
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
+import com.iqkv.docintelligence.venue.MasterVenue;
+import com.iqkv.docintelligence.venue.MasterVenueMapper;
 import org.springframework.stereotype.Service;
 
 @Service

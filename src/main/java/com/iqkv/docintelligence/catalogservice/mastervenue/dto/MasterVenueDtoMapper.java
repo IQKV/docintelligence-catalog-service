@@ -19,7 +19,7 @@ package com.iqkv.docintelligence.catalogservice.mastervenue.dto;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-import com.iqkv.docintelligence.catalogservice.mastervenue.MasterVenue;
+import com.iqkv.docintelligence.venue.MasterVenue;
 
 /**
  * Static translation between {@link MasterVenue} rows and the master venue DTOs.
