@@ -16,10 +16,14 @@
 
 package com.iqkv.docintelligence.catalogservice;
 
+import java.util.List;
 import java.util.TimeZone;
 
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -36,8 +40,44 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableSchedulerLock(defaultLockAtMostFor = "PT55M")
 public class CatalogServiceApplication {
 
+  private static final Logger log = LoggerFactory.getLogger(CatalogServiceApplication.class);
+
   public static void main(String[] args) {
     TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+    getStartupVersionMessages().forEach(log::info);
     SpringApplication.run(CatalogServiceApplication.class, args);
+  }
+
+  private static List<String> getStartupVersionMessages() {
+    final String javaVersion = System.getProperty("java.version");
+    final String javaVmName = System.getProperty("java.vm.name");
+    final String javaVmVersion = System.getProperty("java.vm.version");
+    final String javaVendor = System.getProperty("java.vendor");
+    final String javaVendorVersion = System.getProperty("java.vendor.version");
+    final String osName = System.getProperty("os.name");
+    final String osVersion = System.getProperty("os.version");
+    final String osArch = System.getProperty("os.arch");
+    return List.of(
+        String.format(
+            "Running Java %s (%s %s; %s %s) on %s %s (%s)",
+            javaVersion, javaVmName, javaVmVersion, javaVendor, javaVendorVersion, osName, osVersion, osArch),
+        String.format("Starting %s on Spring Boot %s", applicationBuild(), SpringBootVersion.getVersion())
+    );
+  }
+
+  /**
+   * Reads the build identity from the jar manifest, falling back to the class name when the manifest carries no
+   * implementation entries (for example when running from an IDE or from test classes).
+   *
+   * @return the application name with its version, or the simple class name
+   */
+  private static String applicationBuild() {
+    final Package applicationPackage = CatalogServiceApplication.class.getPackage();
+    final String title = applicationPackage.getImplementationTitle();
+    final String version = applicationPackage.getImplementationVersion();
+    if (title == null || version == null) {
+      return CatalogServiceApplication.class.getSimpleName();
+    }
+    return title + " " + version;
   }
 }
