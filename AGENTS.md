@@ -71,6 +71,36 @@ project-root/
 - **Infrastructure**: Technical concerns (config, security, persistence framework)
 - **Shared Kernel**: Common code shared across bounded contexts
 
+### Master venue catalog
+
+`public.master_venue*` is platform-owned reference data, not tenant-scoped. This service owns every
+migration for it and serves the admin CRUD surface; `docintelligence-master-venue-worker` is the sole
+writer.
+
+- `master_venue`, `master_venue_alias`, `master_venue_external` —
+  `db/changelog/system/20261020120000-create-master-venue.xml`
+- `master_venue_asset` — `db/changelog/system/20261027120000-create-master-venue-asset.xml`
+
+**Changelog rules**
+
+- A new changeset lives in its own file under `db/changelog/system/`, named after its changeSet id
+  (`<timestamp>-<description>.xml`) and timestamped later than every existing one.
+- Append every new file to `db/changelog/system/db.changelog-system.xml` in timestamp order — that index
+  is the only place the changelog list is maintained. Rollbacks drop tables in FK-safe reverse order.
+- `./mvnw verify` never runs Liquibase (the `test` profile disables it and uses H2), so a changelog
+  change is only proven against a real Postgres.
+
+**Model and persistence**
+
+- `MasterVenue`, `MasterVenueAsset` and their mappers live in the shared artifact
+  `com.iqkv:docintelligence-venue`; this service consumes them through its existing `@MapperScan` and
+  `classpath*:mappers/**/*.xml` scan, with no per-mapper wiring.
+- The HTTP surface stays here, in the `mastervenue` package (DTOs, `MasterVenueService`,
+  `AdminMasterVenueRestResource`); the shared artifact holds no beans.
+- Master-catalog asset objects are stored under
+  `docintelligence/master-catalog/venues/{venueId}/assets/{assetId}/{fileName}`, where `venueId` and
+  `assetId` are UUIDs without hyphens.
+
 ## Execution Discipline
 
 - Root cause first. Fix the real entry point, not a bypass around it.
