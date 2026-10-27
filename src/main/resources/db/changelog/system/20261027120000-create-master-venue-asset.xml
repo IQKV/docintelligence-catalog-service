@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Master venue assets — the photos and attachments of a master venue, in the public
+         schema. Created once for the whole database, never per tenant.
+
+         The row owner is master_venue, not the external provider record: one photo belongs to
+         the venue of record, and provider/source_url carry the provenance instead. -->
+
+    <changeSet id="20261027120000-create-master-venue-asset" author="iqkv">
+
+        <createTable tableName="master_venue_asset" schemaName="public">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="master_venue_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="fk_master_venue_asset_venue"
+                             references="master_venue(id)" deleteCascade="true"/>
+            </column>
+            <!-- Asset taxonomy shared with the tenant venue_assets table: photo, floor_plan, … -->
+            <column name="asset_type" type="VARCHAR(50)"/>
+            <!-- Only set when asset_type is photo. -->
+            <column name="photo_category" type="VARCHAR(50)"/>
+            <column name="display_order" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label" type="VARCHAR(255)"/>
+            <column name="file_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_type" type="VARCHAR(100)"/>
+            <column name="size_bytes" type="BIGINT"/>
+            <column name="s3_key" type="VARCHAR(512)"/>
+            <!-- Provenance: where the bytes were fetched from, and by which provider. -->
+            <column name="source_url" type="TEXT"/>
+            <column name="provider" type="VARCHAR(50)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- One row per asset of the venue of record, so a re-delivered scrape upserts instead
+             of duplicating photos. -->
+        <addUniqueConstraint tableName="master_venue_asset" schemaName="public"
+                             columnNames="master_venue_id, file_name"
+                             constraintName="uq_master_venue_asset_venue_file"/>
+
+        <createIndex tableName="master_venue_asset" schemaName="public"
+                     indexName="idx_master_venue_asset_venue">
+            <column name="master_venue_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="master_venue_asset" schemaName="public"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
