@@ -11,5 +11,6 @@
     <include file="db/changelog/system/20261013120000-create-shedlock-table.xml"/>
     <include file="db/changelog/system/20261020120000-create-master-venue.xml"/>
     <include file="db/changelog/system/20261027120000-create-master-venue-asset.xml"/>
+    <include file="db/changelog/system/20261028120000-add-master-venue-external-identity-unique.xml"/>
 
 </databaseChangeLog>

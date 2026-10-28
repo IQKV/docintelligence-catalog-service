@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog-4.33.xsd">
+
+    <!-- One external identity resolves to exactly one master venue: a provider names a venue
+         once, so (provider, provider_external_id) is the natural key of the ingestion upsert.
+         Without it a re-delivered scrape can only be deduplicated by reading first, and two
+         concurrent runs can map the same provider venue to different master venues. -->
+
+    <changeSet id="20261028120000-add-master-venue-external-identity-unique" author="iqkv">
+
+        <!-- The index backing this constraint covers the same two columns as
+             idx_master_venue_external_provider from 20261020120000-create-master-venue.xml. -->
+        <addUniqueConstraint tableName="master_venue_external" schemaName="public"
+                             columnNames="provider, provider_external_id"
+                             constraintName="uq_master_venue_external_identity"/>
+
+        <rollback>
+            <dropUniqueConstraint tableName="master_venue_external" schemaName="public"
+                                  constraintName="uq_master_venue_external_identity"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
