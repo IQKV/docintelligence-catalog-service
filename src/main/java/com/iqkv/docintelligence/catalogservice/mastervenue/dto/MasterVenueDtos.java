@@ -74,6 +74,35 @@ public final class MasterVenueDtos {
   }
 
   /**
+   * Tenant-facing view of one asset of a master venue.
+   *
+   * <p>The ingestion provenance fields ({@code sourceUrl}, {@code provider}) are internal and are
+   * deliberately absent. {@code s3Key} is exposed so a caller can resolve the stored object.
+   */
+  public record MasterVenueAssetView(
+      UUID id,
+      String assetType,
+      String photoCategory,
+      Integer displayOrder,
+      String label,
+      String fileName,
+      String contentType,
+      Long sizeBytes,
+      String s3Key,
+      Instant createdAt,
+      Instant updatedAt) {
+  }
+
+  /**
+   * Tenant-facing asset collection of a single master venue.
+   *
+   * @param items         the assets, ordered by display order
+   * @param totalElements number of assets in {@code items}
+   */
+  public record MasterVenueAssetListResponse(List<MasterVenueAssetView> items, long totalElements) {
+  }
+
+  /**
    * Full admin view of a master venue, including curation fields.
    */
   public record MasterVenueResponse(

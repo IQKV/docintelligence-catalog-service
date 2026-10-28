@@ -19,6 +19,7 @@ package com.iqkv.docintelligence.catalogservice.mastervenue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +30,8 @@ import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
 import com.iqkv.docintelligence.venue.MasterVenue;
+import com.iqkv.docintelligence.venue.MasterVenueAsset;
+import com.iqkv.docintelligence.venue.MasterVenueAssetMapper;
 import com.iqkv.docintelligence.venue.MasterVenueMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,11 +47,14 @@ class MasterVenueServiceImplTest {
   @Mock
   private MasterVenueMapper masterVenueMapper;
 
+  @Mock
+  private MasterVenueAssetMapper masterVenueAssetMapper;
+
   private MasterVenueServiceImpl masterVenueService;
 
   @BeforeEach
   void setUp() {
-    masterVenueService = new MasterVenueServiceImpl(masterVenueMapper);
+    masterVenueService = new MasterVenueServiceImpl(masterVenueMapper, masterVenueAssetMapper);
   }
 
   @Test
@@ -62,6 +68,100 @@ class MasterVenueServiceImplTest {
     assertThatThrownBy(() -> masterVenueService.getPublicVenue(id))
         .isInstanceOf(MasterVenueNotFoundException.class)
         .hasMessageContaining(id.toString());
+  }
+
+  @Test
+  @DisplayName("listPublicVenueAssets throws when the venue does not exist")
+  void shouldNotListAssetsOfMissingVenue() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.empty());
+
+    // Act & Assert
+    assertThatThrownBy(() -> masterVenueService.listPublicVenueAssets(id))
+        .isInstanceOf(MasterVenueNotFoundException.class)
+        .hasMessageContaining(id.toString());
+  }
+
+  @Test
+  @DisplayName("listPublicVenueAssets maps rows to the safe projection and reports the total")
+  void shouldListPublicVenueAssets() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    final MasterVenue venue = new MasterVenue();
+    venue.setId(id);
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.of(venue));
+
+    final MasterVenueAsset asset = new MasterVenueAsset();
+    asset.setId(UUID.randomUUID());
+    asset.setMasterVenueId(id);
+    asset.setAssetType("PHOTO");
+    asset.setPhotoCategory("gallery");
+    asset.setDisplayOrder(2);
+    asset.setFileName("grand-hall.jpg");
+    asset.setContentType("image/jpeg");
+    asset.setSizeBytes(2048L);
+    asset.setS3Key("docintelligence/master-catalog/venues/" + id + "/assets/"
+                   + UUID.randomUUID() + "/grand-hall.jpg");
+    asset.setSourceUrl("https://cdn.tagvenue.com/grand-hall.jpg");
+    asset.setProvider("tagvenue");
+    when(masterVenueAssetMapper.findByMasterVenueId(id)).thenReturn(List.of(asset));
+
+    // Act
+    final var response = masterVenueService.listPublicVenueAssets(id);
+
+    // Assert
+    assertThat(response.totalElements()).isEqualTo(1L);
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.items().get(0).id()).isEqualTo(asset.getId());
+    assertThat(response.items().get(0).fileName()).isEqualTo("grand-hall.jpg");
+    assertThat(response.items().get(0).displayOrder()).isEqualTo(2);
+    assertThat(response.items().get(0).s3Key()).isEqualTo(asset.getS3Key());
+  }
+
+  @Test
+  @DisplayName("listPublicVenuePhotos throws when the venue does not exist")
+  void shouldNotListPhotosOfMissingVenue() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.empty());
+
+    // Act & Assert
+    assertThatThrownBy(() -> masterVenueService.listPublicVenuePhotos(id))
+        .isInstanceOf(MasterVenueNotFoundException.class)
+        .hasMessageContaining(id.toString());
+  }
+
+  @Test
+  @DisplayName("listPublicVenuePhotos reads through the photo query and maps the safe projection")
+  void shouldListPublicVenuePhotos() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    final MasterVenue venue = new MasterVenue();
+    venue.setId(id);
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.of(venue));
+
+    final MasterVenueAsset photo = new MasterVenueAsset();
+    photo.setId(UUID.randomUUID());
+    photo.setMasterVenueId(id);
+    photo.setAssetType("PHOTO");
+    photo.setPhotoCategory("EXTERIOR");
+    photo.setDisplayOrder(1);
+    photo.setFileName("facade.jpg");
+    photo.setContentType("image/jpeg");
+    when(masterVenueAssetMapper.findPhotosByMasterVenueId(id)).thenReturn(List.of(photo));
+
+    // Act
+    final var response = masterVenueService.listPublicVenuePhotos(id);
+
+    // Assert
+    verify(masterVenueAssetMapper).findPhotosByMasterVenueId(id);
+    verify(masterVenueAssetMapper, never()).findByMasterVenueId(any(UUID.class));
+    assertThat(response.totalElements()).isEqualTo(1L);
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.items().get(0).assetType()).isEqualTo("PHOTO");
+    assertThat(response.items().get(0).photoCategory()).isEqualTo("EXTERIOR");
+    assertThat(response.items().get(0).fileName()).isEqualTo("facade.jpg");
   }
 
   @Test

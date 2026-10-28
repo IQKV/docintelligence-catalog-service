@@ -109,6 +109,22 @@ class MasterVenueRestResourceSecurityTest {
   }
 
   @Test
+  @DisplayName("Tenant asset listing rejects an anonymous caller once the tenant is resolved")
+  void tenantAssetsRejectAnonymous() throws Exception {
+    mockMvc.perform(get(TENANT_PATH + "/00000000-0000-0000-0000-000000000001/assets")
+            .header(TENANT_HEADER, TENANT_KEY))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Tenant photo listing rejects an anonymous caller once the tenant is resolved")
+  void tenantPhotosRejectAnonymous() throws Exception {
+    mockMvc.perform(get(TENANT_PATH + "/00000000-0000-0000-0000-000000000001/photos")
+            .header(TENANT_HEADER, TENANT_KEY))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
   @DisplayName("Tenant search rejects an authenticated caller without MEMBER authority")
   @WithMockUser(authorities = "PLATFORM_ADMIN")
   void tenantSearchRejectsMissingMemberAuthority() throws Exception {

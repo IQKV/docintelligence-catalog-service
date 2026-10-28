@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.venue.MasterVenue;
+import com.iqkv.docintelligence.venue.MasterVenueAsset;
 
 /**
  * Static translation between {@link MasterVenue} rows and the master venue DTOs.
@@ -73,6 +74,27 @@ public final class MasterVenueDtoMapper {
         venue.getLocationLng(),
         venue.getCreatedAt(),
         venue.getUpdatedAt()
+    );
+  }
+
+  /**
+   * Builds the tenant-facing projection of one asset. The ingestion provenance fields
+   * ({@code sourceUrl}, {@code provider}) are dropped; {@code s3Key} is kept so the caller can
+   * resolve the stored object.
+   */
+  public static MasterVenueDtos.MasterVenueAssetView toPublicAssetView(final MasterVenueAsset asset) {
+    return new MasterVenueDtos.MasterVenueAssetView(
+        asset.getId(),
+        asset.getAssetType(),
+        asset.getPhotoCategory(),
+        asset.getDisplayOrder(),
+        asset.getLabel(),
+        asset.getFileName(),
+        asset.getContentType(),
+        asset.getSizeBytes(),
+        asset.getS3Key(),
+        asset.getCreatedAt(),
+        asset.getUpdatedAt()
     );
   }
 

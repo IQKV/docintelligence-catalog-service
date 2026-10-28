@@ -16,11 +16,14 @@
 
 package com.iqkv.docintelligence.catalogservice.mastervenue;
 
+import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtoMapper;
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
 import com.iqkv.docintelligence.venue.MasterVenue;
+import com.iqkv.docintelligence.venue.MasterVenueAsset;
+import com.iqkv.docintelligence.venue.MasterVenueAssetMapper;
 import com.iqkv.docintelligence.venue.MasterVenueMapper;
 import org.springframework.stereotype.Service;
 
@@ -29,8 +32,12 @@ public class MasterVenueServiceImpl implements MasterVenueService {
 
   private final MasterVenueMapper masterVenueMapper;
 
-  public MasterVenueServiceImpl(final MasterVenueMapper masterVenueMapper) {
+  private final MasterVenueAssetMapper masterVenueAssetMapper;
+
+  public MasterVenueServiceImpl(final MasterVenueMapper masterVenueMapper,
+                                final MasterVenueAssetMapper masterVenueAssetMapper) {
     this.masterVenueMapper = masterVenueMapper;
+    this.masterVenueAssetMapper = masterVenueAssetMapper;
   }
 
   @Override
@@ -46,6 +53,25 @@ public class MasterVenueServiceImpl implements MasterVenueService {
   @Override
   public MasterVenueDtos.MasterVenuePublicResponse getPublicVenue(final UUID id) {
     return MasterVenueDtoMapper.toPublicResponse(requireVenue(id));
+  }
+
+  @Override
+  public MasterVenueDtos.MasterVenueAssetListResponse listPublicVenueAssets(final UUID id) {
+    requireVenue(id);
+    return toAssetList(masterVenueAssetMapper.findByMasterVenueId(id));
+  }
+
+  @Override
+  public MasterVenueDtos.MasterVenueAssetListResponse listPublicVenuePhotos(final UUID id) {
+    requireVenue(id);
+    return toAssetList(masterVenueAssetMapper.findPhotosByMasterVenueId(id));
+  }
+
+  private MasterVenueDtos.MasterVenueAssetListResponse toAssetList(final List<MasterVenueAsset> assets) {
+    return new MasterVenueDtos.MasterVenueAssetListResponse(
+        assets.stream().map(MasterVenueDtoMapper::toPublicAssetView).toList(),
+        assets.size()
+    );
   }
 
   @Override

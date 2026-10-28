@@ -106,4 +106,48 @@ public class MasterVenueRestResource {
       @Parameter(description = "Master venue UUID") @PathVariable final UUID id) {
     return ResponseEntity.ok(masterVenueService.getPublicVenue(id));
   }
+
+  @GetMapping("/{id}/assets")
+  @Operation(
+      summary = "List the assets of a master venue",
+      description = "Returns the photos and attachments of the given master venue, ordered by display "
+                    + "order. The ingestion provenance fields are not exposed. Responds 404 when the "
+                    + "venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Assets of the master venue",
+                   content = @Content(schema = @Schema(implementation = MasterVenueDtos.MasterVenueAssetListResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Master venue not found", content = @Content)
+  })
+  public ResponseEntity<MasterVenueDtos.MasterVenueAssetListResponse> listAssets(
+      @Parameter(description = "Master venue UUID") @PathVariable final UUID id) {
+    return ResponseEntity.ok(masterVenueService.listPublicVenueAssets(id));
+  }
+
+  @GetMapping("/{id}/photos")
+  @Operation(
+      summary = "List the photos of a master venue",
+      description = "Returns the assets of type PHOTO of the given master venue, ordered by display "
+                    + "order — the subset of /assets the gallery renders. The ingestion provenance "
+                    + "fields are not exposed. Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Photos of the master venue",
+                   content = @Content(schema = @Schema(implementation = MasterVenueDtos.MasterVenueAssetListResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Master venue not found", content = @Content)
+  })
+  public ResponseEntity<MasterVenueDtos.MasterVenueAssetListResponse> listPhotos(
+      @Parameter(description = "Master venue UUID") @PathVariable final UUID id) {
+    return ResponseEntity.ok(masterVenueService.listPublicVenuePhotos(id));
+  }
 }

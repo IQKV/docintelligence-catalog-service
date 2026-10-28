@@ -34,6 +34,10 @@ public interface MasterVenueService {
 
   MasterVenueDtos.MasterVenuePublicResponse getPublicVenue(UUID id);
 
+  MasterVenueDtos.MasterVenueAssetListResponse listPublicVenueAssets(UUID id);
+
+  MasterVenueDtos.MasterVenueAssetListResponse listPublicVenuePhotos(UUID id);
+
   MasterVenueDtos.AdminMasterVenueListResponse searchVenues(String search, String city, int limit, int offset);
 
   MasterVenueDtos.MasterVenueResponse getVenue(UUID id);
