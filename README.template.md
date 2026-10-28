@@ -6,7 +6,7 @@ A multi-tenant, JWT-secured microservice on the iQ Key Value platform, backed by
 
 The Catalog Service provides:
 
-- **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants and with full CRUD to platform administrators
+- **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
 - **Ollama connectivity** — LLM client pre-wired to a local Ollama instance via `spring.ai.ollama.*` (base URL and model configurable per environment)
 - **Multi-tenant isolation** — tenant context resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim before every request
 - **Persistence** — data stored in PostgreSQL via MyBatis; Liquibase manages system and per-tenant schema migrations
@@ -35,25 +35,29 @@ Base path: `/api/v1/catalog`
 
 ### Master venues
 
-Read-only tenant surface. Responses use the public projection — `confidence`, `source`, and the raw `metadata` document are not exposed.
+Read-only tenant surface. Responses use the public projection — `confidence`, `source`, raw `metadata`, and asset provenance fields (`sourceUrl`, `provider`) are not exposed.
 
-| Method | Path                  | Auth         | Description                                                                            |
-| :----- | :-------------------- | :----------- | :------------------------------------------------------------------------------------- |
-| `GET`  | `/master-venues`      | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
-| `GET`  | `/master-venues/{id}` | JWT `MEMBER` | Fetch a single master venue by UUID                                                    |
+| Method | Path                         | Auth         | Description                                                                            |
+| :----- | :--------------------------- | :----------- | :------------------------------------------------------------------------------------- |
+| `GET`  | `/master-venues`             | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
+| `GET`  | `/master-venues/{id}`        | JWT `MEMBER` | Fetch a single master venue by UUID                                                    |
+| `GET`  | `/master-venues/{id}/assets` | JWT `MEMBER` | List all assets of a venue, ordered by `displayOrder`, without ingestion provenance    |
+| `GET`  | `/master-venues/{id}/photos` | JWT `MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                    |
 
 ### Admin
 
-Full CRUD over the master venue catalog, using the admin projection (all curation fields included).
+Full CRUD over the master venue catalog, using the admin projection (all curation fields included). Admin asset reads also expose ingestion provenance such as `sourceUrl` and `provider`.
 
-| Method   | Path                        | Auth                 | Description                                                              |
-| :------- | :-------------------------- | :------------------- | :----------------------------------------------------------------------- |
-| `GET`    | `/admin/master-venues`      | JWT `PLATFORM_ADMIN` | Search across the whole catalog, paginated                               |
-| `GET`    | `/admin/master-venues/{id}` | JWT `PLATFORM_ADMIN` | Fetch a single master venue by UUID                                      |
-| `POST`   | `/admin/master-venues`      | JWT `PLATFORM_ADMIN` | Create a master venue; returns `201` with the created resource           |
-| `PUT`    | `/admin/master-venues/{id}` | JWT `PLATFORM_ADMIN` | Replace a master venue in full                                           |
-| `PATCH`  | `/admin/master-venues/{id}` | JWT `PLATFORM_ADMIN` | Partially update a master venue; omitted fields keep their current value |
-| `DELETE` | `/admin/master-venues/{id}` | JWT `PLATFORM_ADMIN` | Delete a master venue; returns `204`                                     |
+| Method   | Path                               | Auth                 | Description                                                              |
+| :------- | :--------------------------------- | :------------------- | :----------------------------------------------------------------------- |
+| `GET`    | `/admin/master-venues`             | JWT `PLATFORM_ADMIN` | Search across the whole catalog, paginated                               |
+| `GET`    | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Fetch a single master venue by UUID                                      |
+| `GET`    | `/admin/master-venues/{id}/assets` | JWT `PLATFORM_ADMIN` | List all assets of a venue, ordered by `displayOrder`, with provenance   |
+| `GET`    | `/admin/master-venues/{id}/photos` | JWT `PLATFORM_ADMIN` | List only `PHOTO` assets for gallery use                                 |
+| `POST`   | `/admin/master-venues`             | JWT `PLATFORM_ADMIN` | Create a master venue; returns `201` with the created resource           |
+| `PUT`    | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Replace a master venue in full                                           |
+| `PATCH`  | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Partially update a master venue; omitted fields keep their current value |
+| `DELETE` | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Delete a master venue; returns `204`                                     |
 
 > Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
 
