@@ -42,6 +42,10 @@ public interface MasterVenueService {
 
   MasterVenueDtos.MasterVenueResponse getVenue(UUID id);
 
+  MasterVenueDtos.AdminMasterVenueAssetListResponse listVenueAssets(UUID id);
+
+  MasterVenueDtos.AdminMasterVenueAssetListResponse listVenuePhotos(UUID id);
+
   MasterVenueDtos.MasterVenueResponse createVenue(MasterVenueDtos.MasterVenueWriteRequest request);
 
   MasterVenueDtos.MasterVenueResponse replaceVenue(UUID id, MasterVenueDtos.MasterVenueWriteRequest request);

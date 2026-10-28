@@ -129,6 +129,37 @@ public final class MasterVenueDtos {
   }
 
   /**
+   * Admin view of one asset of a master venue.
+   *
+   * <p>Extends the tenant-facing projection with the ingestion provenance
+   * ({@code sourceUrl}, {@code provider}), which the tenant tier hides.
+   */
+  public record AdminMasterVenueAssetView(
+      UUID id,
+      String assetType,
+      String photoCategory,
+      Integer displayOrder,
+      String label,
+      String fileName,
+      String contentType,
+      Long sizeBytes,
+      String s3Key,
+      String sourceUrl,
+      String provider,
+      Instant createdAt,
+      Instant updatedAt) {
+  }
+
+  /**
+   * Admin asset collection of a single master venue.
+   *
+   * @param items         the assets, ordered by display order
+   * @param totalElements number of assets in {@code items}
+   */
+  public record AdminMasterVenueAssetListResponse(List<AdminMasterVenueAssetView> items, long totalElements) {
+  }
+
+  /**
    * Write payload for both {@code POST /} (create) and {@code PUT /{id}} (full replace).
    *
    * <p>{@code metadata} and {@code confidence} are optional: a create falls back to the

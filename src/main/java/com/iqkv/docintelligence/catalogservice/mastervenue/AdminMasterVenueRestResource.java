@@ -43,7 +43,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Platform-admin master venue surface — full CRUD plus search.
+ * Platform-admin master venue surface — full CRUD, search and asset reads.
  *
  * <p>Restricted to the {@code PLATFORM_ADMIN} authority. The path sits under
  * {@code /api/v1/catalog/admin/**}, so {@code SecurityConfig} enforces the authority and
@@ -93,6 +93,39 @@ public class AdminMasterVenueRestResource {
   public ResponseEntity<MasterVenueDtos.MasterVenueResponse> getById(
       @Parameter(description = "Master venue UUID") @PathVariable final UUID id) {
     return ResponseEntity.ok(masterVenueService.getVenue(id));
+  }
+
+  @GetMapping("/{id}/assets")
+  @Operation(
+      summary = "List the assets of a master venue (platform admin)",
+      description = "Returns the photos and attachments of the given master venue, ordered by display "
+                    + "order, including the ingestion provenance. Responds 404 when the venue does not exist.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Assets of the master venue",
+                   content = @Content(schema = @Schema(
+                       implementation = MasterVenueDtos.AdminMasterVenueAssetListResponse.class))),
+      @ApiResponse(responseCode = "404", description = "Master venue not found", content = @Content)
+  })
+  public ResponseEntity<MasterVenueDtos.AdminMasterVenueAssetListResponse> listAssets(
+      @Parameter(description = "Master venue UUID") @PathVariable final UUID id) {
+    return ResponseEntity.ok(masterVenueService.listVenueAssets(id));
+  }
+
+  @GetMapping("/{id}/photos")
+  @Operation(
+      summary = "List the photos of a master venue (platform admin)",
+      description = "Returns the assets of type PHOTO of the given master venue, ordered by display "
+                    + "order — the subset of /assets the gallery renders. Responds 404 when the venue "
+                    + "does not exist.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Photos of the master venue",
+                   content = @Content(schema = @Schema(
+                       implementation = MasterVenueDtos.AdminMasterVenueAssetListResponse.class))),
+      @ApiResponse(responseCode = "404", description = "Master venue not found", content = @Content)
+  })
+  public ResponseEntity<MasterVenueDtos.AdminMasterVenueAssetListResponse> listPhotos(
+      @Parameter(description = "Master venue UUID") @PathVariable final UUID id) {
+    return ResponseEntity.ok(masterVenueService.listVenuePhotos(id));
   }
 
   @PostMapping

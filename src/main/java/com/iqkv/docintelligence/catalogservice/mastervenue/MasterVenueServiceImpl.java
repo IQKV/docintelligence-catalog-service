@@ -74,6 +74,13 @@ public class MasterVenueServiceImpl implements MasterVenueService {
     );
   }
 
+  private MasterVenueDtos.AdminMasterVenueAssetListResponse toAdminAssetList(final List<MasterVenueAsset> assets) {
+    return new MasterVenueDtos.AdminMasterVenueAssetListResponse(
+        assets.stream().map(MasterVenueDtoMapper::toAdminAssetView).toList(),
+        assets.size()
+    );
+  }
+
   @Override
   public MasterVenueDtos.AdminMasterVenueListResponse searchVenues(final String search, final String city,
                                                                    final int limit, final int offset) {
@@ -87,6 +94,18 @@ public class MasterVenueServiceImpl implements MasterVenueService {
   @Override
   public MasterVenueDtos.MasterVenueResponse getVenue(final UUID id) {
     return MasterVenueDtoMapper.toResponse(requireVenue(id));
+  }
+
+  @Override
+  public MasterVenueDtos.AdminMasterVenueAssetListResponse listVenueAssets(final UUID id) {
+    requireVenue(id);
+    return toAdminAssetList(masterVenueAssetMapper.findByMasterVenueId(id));
+  }
+
+  @Override
+  public MasterVenueDtos.AdminMasterVenueAssetListResponse listVenuePhotos(final UUID id) {
+    requireVenue(id);
+    return toAdminAssetList(masterVenueAssetMapper.findPhotosByMasterVenueId(id));
   }
 
   @Override

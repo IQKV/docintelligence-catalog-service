@@ -248,4 +248,98 @@ class MasterVenueServiceImplTest {
     assertThat(response.items().get(0).name()).isEqualTo("Grand Hall");
     assertThat(response.items().get(0).city()).isEqualTo("Kyiv");
   }
+
+  @Test
+  @DisplayName("listVenueAssets throws when the venue does not exist")
+  void shouldNotListVenueAssetsOfMissingVenue() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.empty());
+
+    // Act & Assert
+    assertThatThrownBy(() -> masterVenueService.listVenueAssets(id))
+        .isInstanceOf(MasterVenueNotFoundException.class)
+        .hasMessageContaining(id.toString());
+  }
+
+  @Test
+  @DisplayName("listVenueAssets maps rows to the admin projection including the ingestion provenance")
+  void shouldListAdminVenueAssets() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    final MasterVenue venue = new MasterVenue();
+    venue.setId(id);
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.of(venue));
+
+    final MasterVenueAsset asset = new MasterVenueAsset();
+    asset.setId(UUID.randomUUID());
+    asset.setMasterVenueId(id);
+    asset.setAssetType("MENU");
+    asset.setDisplayOrder(3);
+    asset.setFileName("menu.pdf");
+    asset.setContentType("application/pdf");
+    asset.setS3Key("docintelligence/master-catalog/venues/" + id + "/assets/" + UUID.randomUUID() + "/menu.pdf");
+    asset.setSourceUrl("https://cdn.tagvenue.com/menu.pdf");
+    asset.setProvider("tagvenue");
+    when(masterVenueAssetMapper.findByMasterVenueId(id)).thenReturn(List.of(asset));
+
+    // Act
+    final var response = masterVenueService.listVenueAssets(id);
+
+    // Assert
+    verify(masterVenueAssetMapper).findByMasterVenueId(id);
+    assertThat(response.totalElements()).isEqualTo(1L);
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.items().get(0).fileName()).isEqualTo("menu.pdf");
+    assertThat(response.items().get(0).s3Key()).isEqualTo(asset.getS3Key());
+    assertThat(response.items().get(0).sourceUrl()).isEqualTo("https://cdn.tagvenue.com/menu.pdf");
+    assertThat(response.items().get(0).provider()).isEqualTo("tagvenue");
+  }
+
+  @Test
+  @DisplayName("listVenuePhotos throws when the venue does not exist")
+  void shouldNotListVenuePhotosOfMissingVenue() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.empty());
+
+    // Act & Assert
+    assertThatThrownBy(() -> masterVenueService.listVenuePhotos(id))
+        .isInstanceOf(MasterVenueNotFoundException.class)
+        .hasMessageContaining(id.toString());
+  }
+
+  @Test
+  @DisplayName("listVenuePhotos reads through the photo query and maps the admin projection")
+  void shouldListAdminVenuePhotos() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    final MasterVenue venue = new MasterVenue();
+    venue.setId(id);
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.of(venue));
+
+    final MasterVenueAsset photo = new MasterVenueAsset();
+    photo.setId(UUID.randomUUID());
+    photo.setMasterVenueId(id);
+    photo.setAssetType("PHOTO");
+    photo.setPhotoCategory("INTERIOR");
+    photo.setDisplayOrder(1);
+    photo.setFileName("lounge.jpg");
+    photo.setContentType("image/jpeg");
+    photo.setSourceUrl("https://cdn.tagvenue.com/lounge.jpg");
+    photo.setProvider("tagvenue");
+    when(masterVenueAssetMapper.findPhotosByMasterVenueId(id)).thenReturn(List.of(photo));
+
+    // Act
+    final var response = masterVenueService.listVenuePhotos(id);
+
+    // Assert
+    verify(masterVenueAssetMapper).findPhotosByMasterVenueId(id);
+    verify(masterVenueAssetMapper, never()).findByMasterVenueId(any(UUID.class));
+    assertThat(response.totalElements()).isEqualTo(1L);
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.items().get(0).assetType()).isEqualTo("PHOTO");
+    assertThat(response.items().get(0).photoCategory()).isEqualTo("INTERIOR");
+    assertThat(response.items().get(0).provider()).isEqualTo("tagvenue");
+  }
 }

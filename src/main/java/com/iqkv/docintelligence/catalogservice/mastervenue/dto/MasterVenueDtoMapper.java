@@ -99,6 +99,28 @@ public final class MasterVenueDtoMapper {
   }
 
   /**
+   * Builds the admin projection of one asset: the tenant-facing fields plus the ingestion
+   * provenance ({@code sourceUrl}, {@code provider}).
+   */
+  public static MasterVenueDtos.AdminMasterVenueAssetView toAdminAssetView(final MasterVenueAsset asset) {
+    return new MasterVenueDtos.AdminMasterVenueAssetView(
+        asset.getId(),
+        asset.getAssetType(),
+        asset.getPhotoCategory(),
+        asset.getDisplayOrder(),
+        asset.getLabel(),
+        asset.getFileName(),
+        asset.getContentType(),
+        asset.getSizeBytes(),
+        asset.getS3Key(),
+        asset.getSourceUrl(),
+        asset.getProvider(),
+        asset.getCreatedAt(),
+        asset.getUpdatedAt()
+    );
+  }
+
+  /**
    * Builds a new row from a create request, applying an id and the documented defaults.
    * The id is generated here because the schema has no database-side default.
    */
