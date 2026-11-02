@@ -53,4 +53,14 @@ public interface MasterVenueService {
   MasterVenueDtos.MasterVenueResponse patchVenue(UUID id, MasterVenueDtos.MasterVenuePatchRequest request);
 
   void deleteVenue(UUID id);
+
+  /**
+   * Runs a semantic (vector) search over the master venue catalog.
+   *
+   * @param query natural-language query string
+   * @param city  optional exact city filter; {@code null} disables the filter
+   * @param limit maximum number of results
+   * @return similarity-ranked search response
+   */
+  MasterVenueDtos.SemanticSearchResponse semanticSearch(String query, String city, int limit);
 }

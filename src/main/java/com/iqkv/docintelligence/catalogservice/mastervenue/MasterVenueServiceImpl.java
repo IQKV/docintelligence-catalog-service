@@ -34,10 +34,14 @@ public class MasterVenueServiceImpl implements MasterVenueService {
 
   private final MasterVenueAssetMapper masterVenueAssetMapper;
 
+  private final MasterVenueSemanticSearchService semanticSearchService;
+
   public MasterVenueServiceImpl(final MasterVenueMapper masterVenueMapper,
-                                final MasterVenueAssetMapper masterVenueAssetMapper) {
+                                final MasterVenueAssetMapper masterVenueAssetMapper,
+                                final MasterVenueSemanticSearchService semanticSearchService) {
     this.masterVenueMapper = masterVenueMapper;
     this.masterVenueAssetMapper = masterVenueAssetMapper;
+    this.semanticSearchService = semanticSearchService;
   }
 
   @Override
@@ -138,6 +142,13 @@ public class MasterVenueServiceImpl implements MasterVenueService {
   public void deleteVenue(final UUID id) {
     requireVenue(id);
     masterVenueMapper.deleteById(id);
+  }
+
+  @Override
+  public MasterVenueDtos.SemanticSearchResponse semanticSearch(final String query,
+                                                               final String city,
+                                                               final int limit) {
+    return semanticSearchService.search(query, city, limit);
   }
 
   private MasterVenue requireVenue(final UUID id) {

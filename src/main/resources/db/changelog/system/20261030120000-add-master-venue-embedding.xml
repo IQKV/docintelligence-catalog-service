@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Semantic / vector search for master venues.
+         Requires pgvector extension (pgvector/pgvector:pg17 image already in stack).
+         Dimension 768 matches nomic-embed-text; change the constant if the model changes.
+         Rows are populated asynchronously by VenueEmbeddingBackfillService; new rows
+         are embedded by the ingestion worker after upsert.
+         NULL = not yet embedded — excluded from vector search, still in keyword search. -->
+    <changeSet id="20261030120000-add-master-venue-embedding" author="iqkv">
+
+        <sql>CREATE EXTENSION IF NOT EXISTS vector</sql>
+
+        <sql>ALTER TABLE public.master_venue ADD COLUMN IF NOT EXISTS embedding vector(768)</sql>
+
+        <!-- HNSW index for fast approximate nearest-neighbour with cosine distance.
+             m=16 / ef_construction=64 are conservative defaults; tune for recall vs speed. -->
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_master_venue_embedding_hnsw
+            ON public.master_venue
+            USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS public.idx_master_venue_embedding_hnsw</sql>
+            <sql>ALTER TABLE public.master_venue DROP COLUMN IF EXISTS embedding</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

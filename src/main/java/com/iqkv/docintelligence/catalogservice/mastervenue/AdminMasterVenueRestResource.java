@@ -43,7 +43,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Platform-admin master venue surface — full CRUD, search and asset reads.
+ * Platform-admin master venue surface — full CRUD, keyword search, semantic search and asset reads.
  *
  * <p>Restricted to the {@code PLATFORM_ADMIN} authority. The path sits under
  * {@code /api/v1/catalog/admin/**}, so {@code SecurityConfig} enforces the authority and
@@ -78,6 +78,28 @@ public class AdminMasterVenueRestResource {
       @Parameter(description = "Zero-based row offset")
       @RequestParam(defaultValue = "0") final int offset) {
     return ResponseEntity.ok(masterVenueService.searchVenues(search, city, limit, offset));
+  }
+
+  @GetMapping("/search/semantic")
+  @Operation(
+      summary = "Semantic search over master venues (platform admin)",
+      description = "Embeds the query with the configured Ollama embedding model, then returns the "
+                    + "top matching venues by cosine similarity using the pgvector HNSW index. "
+                    + "Only venues that have already been embedded are considered. "
+                    + "Responds 200 with an empty list when no embeddings exist yet.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Semantic search results",
+                   content = @Content(schema = @Schema(
+                       implementation = MasterVenueDtos.SemanticSearchResponse.class)))
+  })
+  public ResponseEntity<MasterVenueDtos.SemanticSearchResponse> semanticSearch(
+      @Parameter(description = "Natural-language search query", required = true)
+      @RequestParam final String q,
+      @Parameter(description = "Optional exact city filter, compared case-insensitively")
+      @RequestParam(required = false) final String city,
+      @Parameter(description = "Maximum number of results to return (default 20, max 100)")
+      @RequestParam(defaultValue = "20") final int limit) {
+    return ResponseEntity.ok(masterVenueService.semanticSearch(q, city, Math.min(limit, 100)));
   }
 
   @GetMapping("/{id}")

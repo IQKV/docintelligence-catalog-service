@@ -193,4 +193,36 @@ public final class MasterVenueDtos {
       BigDecimal confidence,
       String source) {
   }
+
+  /**
+   * Single item in a semantic search result page.
+   *
+   * <p>Extends the admin venue projection with a {@code similarity} score in the range
+   * [0, 1] (1 = identical). The score is derived from cosine distance:
+   * {@code similarity = 1 − cosine_distance}.
+   */
+  public record SemanticSearchResult(
+      UUID id,
+      String name,
+      String address,
+      String city,
+      BigDecimal locationLat,
+      BigDecimal locationLng,
+      String metadata,
+      BigDecimal confidence,
+      String source,
+      String primaryPhotoUrl,
+      Instant createdAt,
+      Instant updatedAt,
+      double similarity) {
+  }
+
+  /**
+   * Semantic search result page.
+   *
+   * @param items         ranked by similarity descending
+   * @param totalElements total number of venues in the result set (before the limit)
+   */
+  public record SemanticSearchResponse(List<SemanticSearchResult> items, long totalElements) {
+  }
 }
