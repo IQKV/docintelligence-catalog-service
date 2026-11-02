@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Denormalise the primary photo URL onto master_venue to avoid a
+         join to master_venue_asset on every list/detail read.
+         Set by the ingestion worker from the first asset (display_order=0). -->
+    <changeSet id="20261029120000-add-master-venue-primary-photo-url" author="iqkv">
+
+        <addColumn tableName="master_venue" schemaName="public">
+            <column name="primary_photo_url" type="TEXT"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="master_venue" schemaName="public" columnName="primary_photo_url"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

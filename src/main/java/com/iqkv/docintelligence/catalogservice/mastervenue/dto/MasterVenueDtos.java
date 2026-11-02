@@ -47,6 +47,7 @@ public final class MasterVenueDtos {
       String city,
       BigDecimal locationLat,
       BigDecimal locationLng,
+      String primaryPhotoUrl,
       Instant createdAt,
       Instant updatedAt) {
   }
@@ -60,6 +61,7 @@ public final class MasterVenueDtos {
       String city,
       BigDecimal locationLat,
       BigDecimal locationLng,
+      String primaryPhotoUrl,
       Instant createdAt,
       Instant updatedAt) {
   }
@@ -115,6 +117,7 @@ public final class MasterVenueDtos {
       String metadata,
       BigDecimal confidence,
       String source,
+      String primaryPhotoUrl,
       Instant createdAt,
       Instant updatedAt) {
   }

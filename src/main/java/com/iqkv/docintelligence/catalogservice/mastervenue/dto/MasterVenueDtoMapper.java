@@ -47,6 +47,7 @@ public final class MasterVenueDtoMapper {
         venue.getMetadata(),
         venue.getConfidence(),
         venue.getSource(),
+        venue.getPrimaryPhotoUrl(),
         venue.getCreatedAt(),
         venue.getUpdatedAt()
     );
@@ -60,6 +61,7 @@ public final class MasterVenueDtoMapper {
         venue.getCity(),
         venue.getLocationLat(),
         venue.getLocationLng(),
+        venue.getPrimaryPhotoUrl(),
         venue.getCreatedAt(),
         venue.getUpdatedAt()
     );
@@ -72,6 +74,7 @@ public final class MasterVenueDtoMapper {
         venue.getCity(),
         venue.getLocationLat(),
         venue.getLocationLng(),
+        venue.getPrimaryPhotoUrl(),
         venue.getCreatedAt(),
         venue.getUpdatedAt()
     );
