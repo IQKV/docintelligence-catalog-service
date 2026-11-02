@@ -14,6 +14,22 @@
             <column name="primary_photo_url" type="TEXT"/>
         </addColumn>
 
+        <!-- Backfill from the asset with the lowest display_order for each venue.
+             Rows with no assets keep NULL, which is the correct default. -->
+        <sql>
+            UPDATE public.master_venue mv
+            SET primary_photo_url = a.source_url
+            FROM (
+                SELECT DISTINCT ON (master_venue_id)
+                    master_venue_id,
+                    source_url
+                FROM public.master_venue_asset
+                WHERE source_url IS NOT NULL
+                ORDER BY master_venue_id, display_order, id
+            ) a
+            WHERE mv.id = a.master_venue_id;
+        </sql>
+
         <rollback>
             <dropColumn tableName="master_venue" schemaName="public" columnName="primary_photo_url"/>
         </rollback>
