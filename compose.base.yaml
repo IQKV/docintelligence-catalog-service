@@ -1,7 +1,8 @@
 services:
   # PostgreSQL Database for Catalog Service - Local Development
+  # pgvector/pgvector image required for the vector extension used by semantic search.
   postgres-catalog:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17-bookworm
     container_name: foundation-catalog-postgres-dev
     environment:
       POSTGRES_DB: catalogservice
@@ -192,6 +193,10 @@ services:
       # Ollama — local LLM inference
       SPRING_AI_OLLAMA_BASE_URL: "http://ollama:11434"
       SPRING_AI_OLLAMA_CHAT_OPTIONS_MODEL: "llama3.2"
+      SPRING_AI_OLLAMA_EMBEDDING_MODEL: "nomic-embed-text"
+      # Semantic search backfill — set to true once nomic-embed-text is pulled.
+      SEMANTIC_SEARCH_BACKFILL_ENABLED: "false"
+      SEMANTIC_SEARCH_BACKFILL_INTERVAL: "PT5M"
     ports:
       - "8080:8080" # Catalog Service API
       - "8081:8081" # Actuator / management
@@ -202,6 +207,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     networks:
       - catalog-service-network
     healthcheck:
@@ -228,19 +235,41 @@ services:
     image: ollama/ollama:latest
     container_name: foundation-catalog-ollama-dev
     environment:
-      # Allow requests from the service container and the local browser
       OLLAMA_ORIGINS: "http://localhost:8080,http://catalog-service:8080"
-      # Keep models loaded indefinitely (no idle unload)
       OLLAMA_KEEP_ALIVE: -1
     ports:
-      - "11434:11434" # Ollama REST API
+      - "11434:11434"
     volumes:
       - ollama_catalog_data:/root/.ollama
     networks:
       - catalog-service-network
     restart: unless-stopped
-    # Pull a model after first start:
-    #   docker exec foundation-catalog-ollama-dev ollama pull llama3.2
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Ollama model init — pulls chat and embedding models on first start.
+  # Exits on success; restart: on-failure retries if Ollama isn't ready yet.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: foundation-catalog-ollama-init-dev
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - catalog-service-network
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    entrypoint: >
+      /bin/sh -c "
+        ollama pull llama3.2 &&
+        ollama pull nomic-embed-text &&
+        echo 'Models ready.'
+      "
+    restart: on-failure
 
   # SonarQube for code quality analysis
   sonar:

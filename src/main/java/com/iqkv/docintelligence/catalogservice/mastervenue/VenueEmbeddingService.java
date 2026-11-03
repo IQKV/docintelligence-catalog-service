@@ -77,8 +77,7 @@ public class VenueEmbeddingService {
   public void embed(final MasterVenue venue) {
     try {
       final var text = buildEmbeddingText(venue);
-      final var vector = embeddingModel.embed(text);
-      final float[] floats = toFloatArray(vector);
+      final float[] floats = embeddingModel.embed(text);
       masterVenueMapper.updateEmbedding(venue.getId(), floats);
       log.debug("embedded venue {} ({} dims)", venue.getId(), floats.length);
     } catch (final RuntimeException ex) {
@@ -95,8 +94,7 @@ public class VenueEmbeddingService {
    * @return float[] embedding vector
    */
   public float[] embedQuery(final String query) {
-    final var vector = embeddingModel.embed(query);
-    return toFloatArray(vector);
+    return embeddingModel.embed(query);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -125,13 +123,5 @@ public class VenueEmbeddingService {
       sb.append(venue.getMetadata());
     }
     return sb.toString().strip();
-  }
-
-  private static float[] toFloatArray(final java.util.List<Double> vector) {
-    final float[] result = new float[vector.size()];
-    for (int i = 0; i < vector.size(); i++) {
-      result[i] = vector.get(i).floatValue();
-    }
-    return result;
   }
 }
