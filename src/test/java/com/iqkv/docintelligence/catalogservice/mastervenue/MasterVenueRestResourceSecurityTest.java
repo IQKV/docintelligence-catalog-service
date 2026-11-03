@@ -87,6 +87,25 @@ class MasterVenueRestResourceSecurityTest {
   }
 
   @Test
+  @DisplayName("Admin bulk delete rejects an anonymous caller")
+  void adminBulkDeleteRejectsAnonymous() throws Exception {
+    mockMvc.perform(delete(ADMIN_PATH)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"ids\":[\"00000000-0000-0000-0000-000000000001\"]}"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Admin bulk delete rejects a caller without PLATFORM_ADMIN")
+  @WithMockUser(authorities = "MEMBER")
+  void adminBulkDeleteRejectsNonPlatformAdmin() throws Exception {
+    mockMvc.perform(delete(ADMIN_PATH)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"ids\":[\"00000000-0000-0000-0000-000000000001\"]}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   @DisplayName("Admin endpoints reject a caller without PLATFORM_ADMIN")
   @WithMockUser(authorities = "MEMBER")
   void adminEndpointsRejectNonPlatformAdmin() throws Exception {

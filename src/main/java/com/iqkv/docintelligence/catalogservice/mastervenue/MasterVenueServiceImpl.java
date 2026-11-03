@@ -26,6 +26,7 @@ import com.iqkv.docintelligence.venue.MasterVenueAsset;
 import com.iqkv.docintelligence.venue.MasterVenueAssetMapper;
 import com.iqkv.docintelligence.venue.MasterVenueMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MasterVenueServiceImpl implements MasterVenueService {
@@ -142,6 +143,13 @@ public class MasterVenueServiceImpl implements MasterVenueService {
   public void deleteVenue(final UUID id) {
     requireVenue(id);
     masterVenueMapper.deleteById(id);
+  }
+
+  @Override
+  @Transactional
+  public void deleteVenues(final List<UUID> ids) {
+    // No existence check: DELETE of an unknown id is a no-op, which is what makes the batch idempotent.
+    ids.forEach(masterVenueMapper::deleteById);
   }
 
   @Override

@@ -212,4 +212,23 @@ public class AdminMasterVenueRestResource {
     masterVenueService.deleteVenue(id);
     return ResponseEntity.noContent().build();
   }
+
+  @DeleteMapping
+  @Operation(
+      summary = "Bulk delete master venues",
+      description = "Permanently deletes every venue whose id appears in the request body, in a "
+                    + "single request. Deletion is idempotent: ids that match no venue are silently "
+                    + "ignored, so repeating the request is safe. Aliases and external provider "
+                    + "records are removed by the database cascade. Responds 204 with no body.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "Master venues deleted", content = @Content),
+      @ApiResponse(responseCode = "400", description = "Request validation failed — the id list is "
+                                                       + "empty or holds more than 100 ids",
+                   content = @Content)
+  })
+  public ResponseEntity<Void> deleteBulk(
+      @Valid @RequestBody final MasterVenueDtos.MasterVenueBulkDeleteRequest request) {
+    masterVenueService.deleteVenues(request.ids());
+    return ResponseEntity.noContent().build();
+  }
 }

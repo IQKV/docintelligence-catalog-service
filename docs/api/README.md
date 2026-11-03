@@ -56,8 +56,9 @@ Responses use the admin projection, which includes `confidence`, `source`, the r
 | `PUT`    | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Replace a master venue in full                                             |
 | `PATCH`  | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Partially update a master venue; omitted fields keep their current value   |
 | `DELETE` | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Delete a master venue; returns `204`                                       |
+| `DELETE` | `/admin/master-venues`             | JWT `PLATFORM_ADMIN` | Bulk delete master venues by id; idempotent, returns `204`                 |
 
-On creation, omitted `metadata` falls back to the canonical empty document and omitted `confidence` to `1.0`. Deleting a venue removes its aliases and external provider records through the database cascade.
+On creation, omitted `metadata` falls back to the canonical empty document and omitted `confidence` to `1.0`. Deleting a venue removes its aliases and external provider records through the database cascade. `DELETE /admin/master-venues` accepts a JSON body of `{"ids": [uuid, ...]}` (1–100 ids) and removes every matching venue in one transaction; ids that match no venue are silently ignored, so the request can be retried safely, and empty or oversized id lists are rejected with `400`.
 
 ---
 

@@ -58,6 +58,9 @@ Full CRUD over the master venue catalog, using the admin projection (all curatio
 | `PUT`    | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Replace a master venue in full                                           |
 | `PATCH`  | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Partially update a master venue; omitted fields keep their current value |
 | `DELETE` | `/admin/master-venues/{id}`        | JWT `PLATFORM_ADMIN` | Delete a master venue; returns `204`                                     |
+| `DELETE` | `/admin/master-venues`             | JWT `PLATFORM_ADMIN` | Bulk delete master venues; idempotent, returns `204`                     |
+
+`DELETE /admin/master-venues` takes a JSON body of `{"ids": [uuid, ...]}` (1–100 ids) and removes every matching venue in one transaction. Deleting a venue removes its aliases and external provider records through the database cascade; ids that match no venue are silently ignored, so the request can be retried safely. Empty or oversized id lists are rejected with `400`.
 
 > Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
 

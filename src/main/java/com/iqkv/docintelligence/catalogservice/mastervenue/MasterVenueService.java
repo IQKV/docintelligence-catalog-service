@@ -16,6 +16,7 @@
 
 package com.iqkv.docintelligence.catalogservice.mastervenue;
 
+import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
@@ -53,6 +54,16 @@ public interface MasterVenueService {
   MasterVenueDtos.MasterVenueResponse patchVenue(UUID id, MasterVenueDtos.MasterVenuePatchRequest request);
 
   void deleteVenue(UUID id);
+
+  /**
+   * Deletes every venue whose identifier appears in {@code ids}.
+   *
+   * <p>Idempotent: identifiers that match no venue are ignored, so repeating the call is always
+   * safe. Applies as one unit — either every matching venue is removed or none is.
+   *
+   * @param ids the identifiers of the venues to delete
+   */
+  void deleteVenues(List<UUID> ids);
 
   /**
    * Runs a semantic (vector) search over the master venue catalog.

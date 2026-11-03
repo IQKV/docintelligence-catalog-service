@@ -17,6 +17,8 @@
 package com.iqkv.docintelligence.catalogservice.mastervenue.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -192,6 +194,16 @@ public final class MasterVenueDtos {
       String metadata,
       BigDecimal confidence,
       String source) {
+  }
+
+  /**
+   * Bulk-delete payload for {@code DELETE /api/v1/catalog/admin/master-venues}.
+   *
+   * <p>Deletion is idempotent: identifiers that match no venue are silently ignored, so a
+   * repeated request is always safe. The list is capped to keep a single request bounded.
+   */
+  public record MasterVenueBulkDeleteRequest(
+      @NotEmpty @Size(max = 100) List<UUID> ids) {
   }
 
   /**

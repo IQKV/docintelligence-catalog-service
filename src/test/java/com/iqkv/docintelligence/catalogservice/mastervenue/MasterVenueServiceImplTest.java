@@ -180,6 +180,22 @@ class MasterVenueServiceImplTest {
   }
 
   @Test
+  @DisplayName("deleteVenues deletes every id without an existence check")
+  void shouldBulkDeleteWithoutExistenceCheck() {
+    // Arrange
+    final var first = UUID.randomUUID();
+    final var second = UUID.randomUUID();
+
+    // Act
+    masterVenueService.deleteVenues(List.of(first, second));
+
+    // Assert
+    verify(masterVenueMapper).deleteById(first);
+    verify(masterVenueMapper).deleteById(second);
+    verify(masterVenueMapper, never()).findById(any(UUID.class));
+  }
+
+  @Test
   @DisplayName("createVenue generates an id and applies the documented defaults")
   void shouldApplyDefaultsOnCreate() {
     // Arrange
