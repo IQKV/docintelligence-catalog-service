@@ -35,12 +35,6 @@ services:
       file: compose.base.yaml
       service: ollama
 
-  # Ollama model init — pulls llama3.2 and nomic-embed-text on first start
-  ollama-init:
-    extends:
-      file: compose.base.yaml
-      service: ollama-init
-
   # SonarQube for code quality analysis
   sonar:
     extends:
