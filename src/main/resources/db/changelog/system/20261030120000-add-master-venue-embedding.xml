@@ -13,8 +13,6 @@
          NULL = not yet embedded — excluded from vector search, still in keyword search. -->
     <changeSet id="20261030120000-add-master-venue-embedding" author="iqkv">
 
-        <sql>CREATE EXTENSION IF NOT EXISTS vector</sql>
-
         <sql>ALTER TABLE public.master_venue ADD COLUMN IF NOT EXISTS embedding vector(768)</sql>
 
         <!-- HNSW index for fast approximate nearest-neighbour with cosine distance.
