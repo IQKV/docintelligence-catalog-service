@@ -128,14 +128,6 @@ iqkv:
     service-url: ${BILLING_SERVICE_URI:http://foundation-billing-service}
     # How often the plan catalog cache is refreshed (ISO-8601 duration)
     plan-refresh-interval: ${BILLING_PLAN_REFRESH_INTERVAL:PT10M}
-  semantic-search:
-    embedding:
-      backfill:
-        # Set to true once nomic-embed-text is pulled in the Ollama instance.
-        # Starts the backfill scheduler that embeds venues with embedding IS NULL.
-        enabled: ${SEMANTIC_SEARCH_BACKFILL_ENABLED:false}
-        # Fixed delay between backfill cycles (ISO-8601 duration, default 5 minutes).
-        interval: ${SEMANTIC_SEARCH_BACKFILL_INTERVAL:PT5M}
   auth:
     jwt:
       # --- Deployed (K8s) — set JWT_JWKS_URI in Helm values / K8s configmap ---

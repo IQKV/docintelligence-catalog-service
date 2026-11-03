@@ -194,9 +194,6 @@ services:
       SPRING_AI_OLLAMA_BASE_URL: "http://ollama:11434"
       SPRING_AI_OLLAMA_CHAT_OPTIONS_MODEL: "llama3.2"
       SPRING_AI_OLLAMA_EMBEDDING_MODEL: "nomic-embed-text"
-      # Semantic search backfill — set to true once nomic-embed-text is pulled.
-      SEMANTIC_SEARCH_BACKFILL_ENABLED: "false"
-      SEMANTIC_SEARCH_BACKFILL_INTERVAL: "PT5M"
     ports:
       - "8080:8080" # Catalog Service API
       - "8081:8081" # Actuator / management

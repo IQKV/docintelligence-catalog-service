@@ -17,25 +17,29 @@
 package com.iqkv.docintelligence.catalogservice.mastervenue;
 
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
 import com.iqkv.foundation.mybatis.util.PgVectorTypeHandler;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
  * Semantic (vector) search over the master venue catalog.
  *
- * <p>Embeds the incoming query string via {@link VenueEmbeddingService}, then runs an
+ * <p>Embeds the incoming query string via the Ollama {@link EmbeddingModel}, then runs an
  * approximate nearest-neighbour query using the pgvector {@code <=>} cosine-distance
  * operator against the HNSW index on {@code public.master_venue.embedding}.
  *
+ * <p>Venue embeddings are written by {@code docintelligence-master-venue-worker} at ingest
+ * time — this service only embeds the search query, never venue text.
+ *
  * <p>MyBatis is bypassed here because the {@code ::vector} cast on a bound parameter
  * cannot be expressed in MyBatis XML — the PostgreSQL driver needs the value passed as a
- * plain {@code Types.OTHER} string, which {@link JdbcTemplate} supports natively via a
- * {@code PreparedStatementSetter}.
+ * plain {@link Types#OTHER} string, which {@link JdbcTemplate} supports natively.
  *
  * <p>Rows without an embedding ({@code embedding IS NULL}) are excluded from results.
  * The optional {@code city} parameter is applied as a hard SQL predicate before the ANN
@@ -65,12 +69,12 @@ public class MasterVenueSemanticSearchService {
 
   private final JdbcTemplate jdbcTemplate;
 
-  private final VenueEmbeddingService embeddingService;
+  private final EmbeddingModel embeddingModel;
 
   public MasterVenueSemanticSearchService(final JdbcTemplate jdbcTemplate,
-                                          final VenueEmbeddingService embeddingService) {
+                                          final EmbeddingModel embeddingModel) {
     this.jdbcTemplate = jdbcTemplate;
-    this.embeddingService = embeddingService;
+    this.embeddingModel = embeddingModel;
   }
 
   /**
@@ -85,16 +89,15 @@ public class MasterVenueSemanticSearchService {
   public MasterVenueDtos.SemanticSearchResponse search(final String query,
                                                        final String city,
                                                        final int limit) {
-    final float[] queryVector = embeddingService.embedQuery(query);
-    final String vectorLiteral = PgVectorTypeHandler.toVectorLiteral(queryVector);
+    final String vectorLiteral = PgVectorTypeHandler.toVectorLiteral(embeddingModel.embed(query));
 
     final List<MasterVenueDtos.SemanticSearchResult> items = jdbcTemplate.query(
         SEARCH_SQL,
         ps -> {
-          ps.setObject(1, vectorLiteral, java.sql.Types.OTHER);   // embedding <=> ?::vector (ORDER BY)
-          ps.setObject(2, city, java.sql.Types.VARCHAR);           // city IS NULL check
-          ps.setObject(3, city, java.sql.Types.VARCHAR);           // LOWER(city) = LOWER(?)
-          ps.setObject(4, vectorLiteral, java.sql.Types.OTHER);   // embedding <=> ?::vector (SELECT)
+          ps.setObject(1, vectorLiteral, Types.OTHER);   // ORDER BY distance
+          ps.setObject(2, city, Types.VARCHAR);           // city IS NULL check
+          ps.setObject(3, city, Types.VARCHAR);           // LOWER(city) = LOWER(?)
+          ps.setObject(4, vectorLiteral, Types.OTHER);   // SELECT similarity
           ps.setInt(5, limit);
         },
         (rs, rowNum) -> new MasterVenueDtos.SemanticSearchResult(
@@ -121,11 +124,7 @@ public class MasterVenueSemanticSearchService {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private long countEligible(final String city) {
-    final Long count = jdbcTemplate.queryForObject(
-        COUNT_SQL,
-        Long.class,
-        city, city
-    );
+    final Long count = jdbcTemplate.queryForObject(COUNT_SQL, Long.class, city, city);
     return count != null ? count : 0L;
   }
 
