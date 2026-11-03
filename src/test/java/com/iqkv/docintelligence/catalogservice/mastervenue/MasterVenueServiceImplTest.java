@@ -50,11 +50,14 @@ class MasterVenueServiceImplTest {
   @Mock
   private MasterVenueAssetMapper masterVenueAssetMapper;
 
+  @Mock
+  private MasterVenueSemanticSearchService semanticSearchService;
+
   private MasterVenueServiceImpl masterVenueService;
 
   @BeforeEach
   void setUp() {
-    masterVenueService = new MasterVenueServiceImpl(masterVenueMapper, masterVenueAssetMapper);
+    masterVenueService = new MasterVenueServiceImpl(masterVenueMapper, masterVenueAssetMapper, semanticSearchService);
   }
 
   @Test
