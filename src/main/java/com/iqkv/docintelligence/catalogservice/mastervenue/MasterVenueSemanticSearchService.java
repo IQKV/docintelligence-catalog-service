@@ -55,7 +55,7 @@ public class MasterVenueSemanticSearchService {
              1 - (embedding <=> ?::vector) AS similarity
       FROM public.master_venue
       WHERE embedding IS NOT NULL
-        AND (? IS NULL OR LOWER(city) = LOWER(?))
+        AND (?::text IS NULL OR LOWER(city) = LOWER(?::text))
       ORDER BY embedding <=> ?::vector
       LIMIT ?
       """;
@@ -64,7 +64,7 @@ public class MasterVenueSemanticSearchService {
       SELECT COUNT(*)
       FROM public.master_venue
       WHERE embedding IS NOT NULL
-        AND (? IS NULL OR LOWER(city) = LOWER(?))
+        AND (?::text IS NULL OR LOWER(city) = LOWER(?::text))
       """;
 
   private final JdbcTemplate jdbcTemplate;
