@@ -25,11 +25,15 @@ import com.iqkv.docintelligence.venue.MasterVenue;
 import com.iqkv.docintelligence.venue.MasterVenueAsset;
 import com.iqkv.docintelligence.venue.MasterVenueAssetMapper;
 import com.iqkv.docintelligence.venue.MasterVenueMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MasterVenueServiceImpl implements MasterVenueService {
+
+  private static final Logger log = LoggerFactory.getLogger(MasterVenueServiceImpl.class);
 
   private final MasterVenueMapper masterVenueMapper;
 
@@ -156,6 +160,8 @@ public class MasterVenueServiceImpl implements MasterVenueService {
   public MasterVenueDtos.SemanticSearchResponse semanticSearch(final String query,
                                                                final String city,
                                                                final int limit) {
+    log.info("Delegating semantic search to the vector search service: q='{}', city={}, limit={}",
+        query, city, limit);
     return semanticSearchService.search(query, city, limit);
   }
 

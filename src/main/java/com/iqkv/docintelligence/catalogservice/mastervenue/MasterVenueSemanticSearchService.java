@@ -27,6 +27,8 @@ import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
 import com.iqkv.foundation.mybatis.util.PgVectorTypeHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class MasterVenueSemanticSearchService {
+
+  private static final Logger log = LoggerFactory.getLogger(MasterVenueSemanticSearchService.class);
 
   private static final String SEARCH_SELECT = """
       SELECT id, name, address, city, location_lat, location_lng,
@@ -106,13 +110,26 @@ public class MasterVenueSemanticSearchService {
   public MasterVenueDtos.SemanticSearchResponse search(final String query,
                                                        final String city,
                                                        final int limit) {
+    log.info("Semantic search started: query='{}', city={}, limit={}", query, city, limit);
     final MasterVenueQueryPlanner.QueryPlan plan = queryPlanner.plan(query);
     final String effectiveCity = city != null ? city : plan.city();
     final Boolean accessible = Boolean.TRUE.equals(plan.accessible()) ? Boolean.TRUE : null;
     final Filter filter = buildFilter(effectiveCity, plan.venueTypes(), plan.minCapacity(),
         plan.maxCapacity(), plan.cateringPolicy(), plan.amenities(), accessible);
 
-    final String vectorLiteral = PgVectorTypeHandler.toVectorLiteral(embeddingModel.embed(plan.semanticQuery()));
+    log.info("Query plan resolved: city={}, venueTypes={}, capacity=[{}, {}], cateringPolicy={}, "
+             + "amenities={}, accessible={}, residualQuery='{}'",
+        effectiveCity, plan.venueTypes(), plan.minCapacity(), plan.maxCapacity(),
+        plan.cateringPolicy(), plan.amenities(), accessible, plan.semanticQuery());
+
+    final float[] embedding = embeddingModel.embed(plan.semanticQuery());
+    final String vectorLiteral = PgVectorTypeHandler.toVectorLiteral(embedding);
+    log.info("Embedded the residual query into a {}-dimensional vector", embedding.length);
+    if (filter.sql().isEmpty()) {
+      log.info("No hard filters resolved — every embedded venue is ranked by cosine similarity");
+    } else {
+      log.info("Applying hard-filter predicates:{}", filter.sql());
+    }
 
     final List<Binder> binders = new ArrayList<>();
     binders.add((ps, index) -> ps.setObject(index, vectorLiteral, Types.OTHER)); // similarity projection
@@ -149,8 +166,11 @@ public class MasterVenueSemanticSearchService {
         effectiveCity, plan.venueTypes(), plan.minCapacity(), plan.maxCapacity(),
         plan.cateringPolicy(), plan.amenities(), accessible);
 
-    return new MasterVenueDtos.SemanticSearchResponse(
-        items, counts.isEmpty() ? 0L : counts.get(0), appliedFilters);
+    final long totalElements = counts.isEmpty() ? 0L : counts.get(0);
+    log.info("Semantic search finished: {} item(s) returned out of {} venue(s) matching the filters",
+        items.size(), totalElements);
+
+    return new MasterVenueDtos.SemanticSearchResponse(items, totalElements, appliedFilters);
   }
 
   // ── Filter construction ───────────────────────────────────────────────────

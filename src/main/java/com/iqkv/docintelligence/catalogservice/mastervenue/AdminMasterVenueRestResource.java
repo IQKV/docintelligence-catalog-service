@@ -28,6 +28,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -56,6 +58,8 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasAuthority('PLATFORM_ADMIN')")
 public class AdminMasterVenueRestResource {
+
+  private static final Logger log = LoggerFactory.getLogger(AdminMasterVenueRestResource.class);
 
   private final MasterVenueService masterVenueService;
 
@@ -106,7 +110,14 @@ public class AdminMasterVenueRestResource {
       @RequestParam(required = false) final String city,
       @Parameter(description = "Maximum number of results to return (default 20, max 100)")
       @RequestParam(defaultValue = "20") final int limit) {
-    return ResponseEntity.ok(masterVenueService.semanticSearch(q, city, Math.min(limit, 100)));
+    final int effectiveLimit = Math.min(limit, 100);
+    log.info("Semantic search request received: q='{}', city={}, limit={}", q, city, effectiveLimit);
+    final MasterVenueDtos.SemanticSearchResponse response =
+        masterVenueService.semanticSearch(q, city, effectiveLimit);
+    log.info("Semantic search response sent: {} item(s) returned out of {} matching venue(s), "
+             + "appliedFilters={}", response.items().size(), response.totalElements(),
+        response.appliedFilters());
+    return ResponseEntity.ok(response);
   }
 
   @GetMapping("/{id}")
