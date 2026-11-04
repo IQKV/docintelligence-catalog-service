@@ -24,8 +24,11 @@ import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenue
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Translates a free-text venue query into a structured {@link QueryPlan} with the Ollama chat
@@ -77,6 +80,18 @@ public class MasterVenueQueryPlanner {
         extracted constraints removed. Never empty — repeat the query when nothing remains.
       """;
 
+  /**
+   * Converter for the model's JSON reply, built on a mapper that tolerates the stray tokens small
+   * models append after the object. Jackson 3 enables {@code FAIL_ON_TRAILING_TOKENS} by default,
+   * so a reply such as {@code {...}{...}} used to abort deserialisation and silently drop every
+   * filter back to plain vector search.
+   */
+  static final BeanOutputConverter<QueryPlan> QUERY_PLAN_CONVERTER = new BeanOutputConverter<>(
+      QueryPlan.class, JsonMapper.builder()
+          .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+              DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+          .build());
+
   private final ObjectProvider<ChatClient.Builder> chatClientBuilder;
 
   private final MasterVenueAiSearchProperties properties;
@@ -104,7 +119,7 @@ public class MasterVenueQueryPlanner {
           .system(SYSTEM_PROMPT)
           .user("<user_input>\n" + truncate(query, MAX_QUERY_CHARS) + "\n</user_input>")
           .call()
-          .entity(QueryPlan.class);
+          .entity(QUERY_PLAN_CONVERTER);
       return sanitize(raw, query);
     } catch (final RuntimeException ex) {
       log.warn("AI query planning failed, falling back to plain vector search: {}", ex.getMessage());

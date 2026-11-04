@@ -17,6 +17,7 @@
 package com.iqkv.docintelligence.catalogservice.mastervenue;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.converter.StructuredOutputConverter;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
@@ -138,7 +140,8 @@ class MasterVenueQueryPlannerTest {
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callResponseSpec);
-    when(callResponseSpec.entity(QueryPlan.class)).thenThrow(new RuntimeException("ollama down"));
+    when(callResponseSpec.entity(any(StructuredOutputConverter.class)))
+        .thenThrow(new RuntimeException("ollama down"));
 
     // Act
     final QueryPlan plan = planner.plan("rooftop party in Kyiv");
@@ -207,6 +210,43 @@ class MasterVenueQueryPlannerTest {
     assertThat(plan).isEqualTo(QueryPlan.empty("rooftop party"));
   }
 
+  @Test
+  @DisplayName("the converter keeps the first object of a reply that repeats itself")
+  void converterShouldTolerateTrailingTokens() {
+    // Arrange: llama3.2 occasionally emits the same JSON object twice.
+    final String modelReply = """
+        {"city":"Kyiv","venueTypes":["rooftop"],"minCapacity":200,"maxCapacity":null,
+         "cateringPolicy":null,"amenities":[],"accessible":null,"semanticQuery":"rooftop party"}
+        {"city":"Lviv","venueTypes":[],"minCapacity":null,"maxCapacity":null,
+         "cateringPolicy":null,"amenities":[],"accessible":null,"semanticQuery":"rooftop party"}
+        """;
+
+    // Act
+    final QueryPlan plan = MasterVenueQueryPlanner.QUERY_PLAN_CONVERTER.convert(modelReply);
+
+    // Assert
+    assertThat(plan.city()).isEqualTo("Kyiv");
+    assertThat(plan.venueTypes()).containsExactly("rooftop");
+    assertThat(plan.minCapacity()).isEqualTo(200);
+  }
+
+  @Test
+  @DisplayName("the converter ignores properties the model invents")
+  void converterShouldIgnoreUnknownProperties() {
+    // Arrange
+    final String modelReply = """
+        {"city":"Kyiv","venueTypes":[],"amenities":[],"confidence":"high",
+         "reasoning":"the query names a city","semanticQuery":"rooftop party"}
+        """;
+
+    // Act
+    final QueryPlan plan = MasterVenueQueryPlanner.QUERY_PLAN_CONVERTER.convert(modelReply);
+
+    // Assert
+    assertThat(plan.city()).isEqualTo("Kyiv");
+    assertThat(plan.semanticQuery()).isEqualTo("rooftop party");
+  }
+
   private void stubModelReturning(final QueryPlan modelOutput) {
     when(chatClientBuilder.getIfAvailable()).thenReturn(builder);
     when(builder.build()).thenReturn(chatClient);
@@ -214,6 +254,6 @@ class MasterVenueQueryPlannerTest {
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callResponseSpec);
-    when(callResponseSpec.entity(QueryPlan.class)).thenReturn(modelOutput);
+    when(callResponseSpec.entity(any(StructuredOutputConverter.class))).thenReturn(modelOutput);
   }
 }
