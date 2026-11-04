@@ -53,11 +53,15 @@ class MasterVenueServiceImplTest {
   @Mock
   private MasterVenueSemanticSearchService semanticSearchService;
 
+  @Mock
+  private MasterVenueEmbeddingService embeddingService;
+
   private MasterVenueServiceImpl masterVenueService;
 
   @BeforeEach
   void setUp() {
-    masterVenueService = new MasterVenueServiceImpl(masterVenueMapper, masterVenueAssetMapper, semanticSearchService);
+    masterVenueService = new MasterVenueServiceImpl(masterVenueMapper, masterVenueAssetMapper,
+        semanticSearchService, embeddingService);
   }
 
   @Test
@@ -243,6 +247,70 @@ class MasterVenueServiceImplTest {
     verify(masterVenueMapper).update(captor.capture());
     assertThat(captor.getValue().getAddress()).isEqualTo("New address");
     assertThat(captor.getValue().getName()).isEqualTo("Old name");
+  }
+
+  @Test
+  @DisplayName("createVenue re-embeds the new venue with its searchable fields")
+  void shouldEmbedOnCreate() {
+    // Arrange
+    final var request = new MasterVenueDtos.MasterVenueWriteRequest(
+        "Grand Hall", "1 Main St", "Kyiv", null, null, null, null, "platform_seed");
+    when(masterVenueMapper.findById(any(UUID.class))).thenAnswer(invocation -> {
+      final MasterVenue venue = new MasterVenue();
+      venue.setId(invocation.getArgument(0, UUID.class));
+      return Optional.of(venue);
+    });
+
+    // Act
+    masterVenueService.createVenue(request);
+
+    // Assert
+    final var captor = ArgumentCaptor.forClass(MasterVenue.class);
+    verify(embeddingService).embed(captor.capture());
+    assertThat(captor.getValue().getName()).isEqualTo("Grand Hall");
+    assertThat(captor.getValue().getCity()).isEqualTo("Kyiv");
+  }
+
+  @Test
+  @DisplayName("replaceVenue re-embeds the venue after overwriting its fields")
+  void shouldEmbedOnReplace() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    final MasterVenue existing = new MasterVenue();
+    existing.setId(id);
+    existing.setName("Old name");
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.of(existing));
+    final var request = new MasterVenueDtos.MasterVenueWriteRequest(
+        "Grand Hall", "1 Main St", "Kyiv", null, null, null, null, "platform_seed");
+
+    // Act
+    masterVenueService.replaceVenue(id, request);
+
+    // Assert
+    final var captor = ArgumentCaptor.forClass(MasterVenue.class);
+    verify(embeddingService).embed(captor.capture());
+    assertThat(captor.getValue().getName()).isEqualTo("Grand Hall");
+  }
+
+  @Test
+  @DisplayName("patchVenue re-embeds the venue after merging the patched fields")
+  void shouldEmbedOnPatch() {
+    // Arrange
+    final var id = UUID.randomUUID();
+    final MasterVenue existing = new MasterVenue();
+    existing.setId(id);
+    existing.setName("Old name");
+    when(masterVenueMapper.findById(id)).thenReturn(Optional.of(existing));
+    final var request = new MasterVenueDtos.MasterVenuePatchRequest(
+        "New name", null, null, null, null, null, null, null);
+
+    // Act
+    masterVenueService.patchVenue(id, request);
+
+    // Assert
+    final var captor = ArgumentCaptor.forClass(MasterVenue.class);
+    verify(embeddingService).embed(captor.capture());
+    assertThat(captor.getValue().getName()).isEqualTo("New name");
   }
 
   @Test

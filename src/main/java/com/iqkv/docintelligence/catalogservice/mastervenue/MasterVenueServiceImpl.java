@@ -41,12 +41,16 @@ public class MasterVenueServiceImpl implements MasterVenueService {
 
   private final MasterVenueSemanticSearchService semanticSearchService;
 
+  private final MasterVenueEmbeddingService embeddingService;
+
   public MasterVenueServiceImpl(final MasterVenueMapper masterVenueMapper,
                                 final MasterVenueAssetMapper masterVenueAssetMapper,
-                                final MasterVenueSemanticSearchService semanticSearchService) {
+                                final MasterVenueSemanticSearchService semanticSearchService,
+                                final MasterVenueEmbeddingService embeddingService) {
     this.masterVenueMapper = masterVenueMapper;
     this.masterVenueAssetMapper = masterVenueAssetMapper;
     this.semanticSearchService = semanticSearchService;
+    this.embeddingService = embeddingService;
   }
 
   @Override
@@ -121,6 +125,7 @@ public class MasterVenueServiceImpl implements MasterVenueService {
   public MasterVenueDtos.MasterVenueResponse createVenue(final MasterVenueDtos.MasterVenueWriteRequest request) {
     final MasterVenue venue = MasterVenueDtoMapper.toEntity(request);
     masterVenueMapper.insert(venue);
+    embeddingService.embed(venue);
     // Re-read so created_at / updated_at reflect the database-computed values.
     return MasterVenueDtoMapper.toResponse(requireVenue(venue.getId()));
   }
@@ -131,6 +136,7 @@ public class MasterVenueServiceImpl implements MasterVenueService {
     final MasterVenue venue = requireVenue(id);
     MasterVenueDtoMapper.applyWrite(venue, request);
     masterVenueMapper.update(venue);
+    embeddingService.embed(venue);
     return MasterVenueDtoMapper.toResponse(requireVenue(id));
   }
 
@@ -140,6 +146,7 @@ public class MasterVenueServiceImpl implements MasterVenueService {
     final MasterVenue venue = requireVenue(id);
     MasterVenueDtoMapper.applyPatch(venue, request);
     masterVenueMapper.update(venue);
+    embeddingService.embed(venue);
     return MasterVenueDtoMapper.toResponse(requireVenue(id));
   }
 
