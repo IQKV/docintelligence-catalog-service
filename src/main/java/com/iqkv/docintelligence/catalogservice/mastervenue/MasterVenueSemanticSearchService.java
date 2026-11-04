@@ -46,7 +46,8 @@ import org.springframework.stereotype.Service;
  * empty plan, and the search degrades to a plain vector scan over the raw query.
  *
  * <p>Venue embeddings are written by {@code docintelligence-master-venue-worker} at ingest
- * time — this service only embeds the search query, never venue text.
+ * time and refreshed on admin edit by {@code MasterVenueEmbeddingService}; this service only
+ * embeds the search query, never venue text.
  *
  * <p>MyBatis is bypassed here because the {@code ::vector} cast on a bound parameter
  * cannot be expressed in MyBatis XML — the PostgreSQL driver needs the value passed as a
