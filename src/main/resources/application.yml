@@ -91,6 +91,12 @@ iqkv:
       # Controlled via MESSAGING_ENABLED env var; defaults to false for local safety.
       # Helm chart configmap sets this per environment (sit/uat/prd).
       enabled: ${MESSAGING_ENABLED:false}
+  catalog:
+    ai-search:
+      # Gates the LLM query planner that turns a semantic-search query into structured
+      # filters. When disabled (or when the Ollama chat model is unreachable) semantic
+      # search falls back to embedding the raw query with no hard filters.
+      enabled: ${CATALOG_AI_SEARCH_ENABLED:true}
   objectstorage:
     # S3-compatible endpoint — MinIO in SIT/UAT, https://s3.amazonaws.com for AWS S3 in prod.
     endpoint: ${OBJECTSTORAGE_ENDPOINT:http://localhost:9000}

@@ -16,8 +16,12 @@
 
 package com.iqkv.docintelligence.catalogservice.mastervenue;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,9 +34,14 @@ import org.springframework.stereotype.Service;
 /**
  * Semantic (vector) search over the master venue catalog.
  *
- * <p>Embeds the incoming query string via the Ollama {@link EmbeddingModel}, then runs an
- * approximate nearest-neighbour query using the pgvector {@code <=>} cosine-distance
- * operator against the HNSW index on {@code public.master_venue.embedding}.
+ * <p>The incoming query is first handed to {@link MasterVenueQueryPlanner}, which asks the chat
+ * model to split it into hard filters (city, venue type, capacity, catering policy, amenities,
+ * accessibility) and a residual free-text query. The hard filters become JSONB {@code WHERE}
+ * predicates that narrow the candidate set, and only the residual text is embedded — so a long,
+ * multi-constraint query no longer dilutes the vector match.
+ *
+ * <p>The planner is optional: when it is disabled or the chat model is unreachable it returns an
+ * empty plan, and the search degrades to a plain vector scan over the raw query.
  *
  * <p>Venue embeddings are written by {@code docintelligence-master-venue-worker} at ingest
  * time — this service only embeds the search query, never venue text.
@@ -42,39 +51,45 @@ import org.springframework.stereotype.Service;
  * plain {@link Types#OTHER} string, which {@link JdbcTemplate} supports natively.
  *
  * <p>Rows without an embedding ({@code embedding IS NULL}) are excluded from results.
- * The optional {@code city} parameter is applied as a hard SQL predicate before the ANN
- * sort so the index scan is narrowed without degrading recall.
  */
 @Service
 public class MasterVenueSemanticSearchService {
 
-  private static final String SEARCH_SQL = """
+  private static final String SEARCH_SELECT = """
       SELECT id, name, address, city, location_lat, location_lng,
              metadata, confidence, source, primary_photo_url,
              created_at, updated_at,
              1 - (embedding <=> ?::vector) AS similarity
       FROM public.master_venue
       WHERE embedding IS NOT NULL
-        AND (?::text IS NULL OR LOWER(city) = LOWER(?::text))
-      ORDER BY embedding <=> ?::vector
-      LIMIT ?
       """;
 
-  private static final String COUNT_SQL = """
-      SELECT COUNT(*)
-      FROM public.master_venue
-      WHERE embedding IS NOT NULL
-        AND (?::text IS NULL OR LOWER(city) = LOWER(?::text))
-      """;
+  private static final String SEARCH_ORDER = "\nORDER BY embedding <=> ?::vector\nLIMIT ?";
+
+  private static final String COUNT_SELECT =
+      "SELECT COUNT(*) FROM public.master_venue WHERE embedding IS NOT NULL";
+
+  /**
+   * Guards the {@code max_total} cast: metadata is free-form JSONB, so a non-numeric value would
+   * otherwise abort the whole query. The {@code CASE} yields SQL {@code NULL} for anything that is
+   * not a positive number, which the {@code >=} comparison then treats as "no match".
+   */
+  private static final String CAPACITY_NUMERIC =
+      "CASE WHEN metadata->'capacity'->>'max_total' ~ '^[0-9]+(\\.[0-9]+)?$' "
+          + "THEN (metadata->'capacity'->>'max_total')::numeric END";
 
   private final JdbcTemplate jdbcTemplate;
 
   private final EmbeddingModel embeddingModel;
 
+  private final MasterVenueQueryPlanner queryPlanner;
+
   public MasterVenueSemanticSearchService(final JdbcTemplate jdbcTemplate,
-                                          final EmbeddingModel embeddingModel) {
+                                          final EmbeddingModel embeddingModel,
+                                          final MasterVenueQueryPlanner queryPlanner) {
     this.jdbcTemplate = jdbcTemplate;
     this.embeddingModel = embeddingModel;
+    this.queryPlanner = queryPlanner;
   }
 
   /**
@@ -82,24 +97,32 @@ public class MasterVenueSemanticSearchService {
    * ranked by cosine similarity descending.
    *
    * @param query natural-language search query
-   * @param city  optional exact city filter; {@code null} disables the filter
+   * @param city  optional explicit city filter; takes precedence over the city the planner
+   *              extracts; {@code null} leaves the decision to the planner
    * @param limit maximum number of results to return
-   * @return search response with ranked items and a total count of eligible venues
+   * @return search response with ranked items, a total count of matching venues, and the hard
+   *     filters that were applied
    */
   public MasterVenueDtos.SemanticSearchResponse search(final String query,
                                                        final String city,
                                                        final int limit) {
-    final String vectorLiteral = PgVectorTypeHandler.toVectorLiteral(embeddingModel.embed(query));
+    final MasterVenueQueryPlanner.QueryPlan plan = queryPlanner.plan(query);
+    final String effectiveCity = city != null ? city : plan.city();
+    final Boolean accessible = Boolean.TRUE.equals(plan.accessible()) ? Boolean.TRUE : null;
+    final Filter filter = buildFilter(effectiveCity, plan.venueTypes(), plan.minCapacity(),
+        plan.maxCapacity(), plan.cateringPolicy(), plan.amenities(), accessible);
+
+    final String vectorLiteral = PgVectorTypeHandler.toVectorLiteral(embeddingModel.embed(plan.semanticQuery()));
+
+    final List<Binder> binders = new ArrayList<>();
+    binders.add((ps, index) -> ps.setObject(index, vectorLiteral, Types.OTHER)); // similarity projection
+    binders.addAll(filter.binders());
+    binders.add((ps, index) -> ps.setObject(index, vectorLiteral, Types.OTHER)); // ORDER BY distance
+    binders.add((ps, index) -> ps.setInt(index, limit));
 
     final List<MasterVenueDtos.SemanticSearchResult> items = jdbcTemplate.query(
-        SEARCH_SQL,
-        ps -> {
-          ps.setObject(1, vectorLiteral, Types.OTHER);   // ORDER BY distance
-          ps.setObject(2, city, Types.VARCHAR);           // city IS NULL check
-          ps.setObject(3, city, Types.VARCHAR);           // LOWER(city) = LOWER(?)
-          ps.setObject(4, vectorLiteral, Types.OTHER);   // SELECT similarity
-          ps.setInt(5, limit);
-        },
+        SEARCH_SELECT + filter.sql() + SEARCH_ORDER,
+        ps -> bindAll(ps, binders),
         (rs, rowNum) -> new MasterVenueDtos.SemanticSearchResult(
             UUID.fromString(rs.getString("id")),
             rs.getString("name"),
@@ -117,18 +140,100 @@ public class MasterVenueSemanticSearchService {
         )
     );
 
-    final long total = countEligible(city);
-    return new MasterVenueDtos.SemanticSearchResponse(items, total);
+    final List<Long> counts = jdbcTemplate.query(
+        COUNT_SELECT + filter.sql(),
+        ps -> bindAll(ps, filter.binders()),
+        (rs, rowNum) -> rs.getLong(1));
+
+    final MasterVenueDtos.SemanticSearchFilters appliedFilters = new MasterVenueDtos.SemanticSearchFilters(
+        effectiveCity, plan.venueTypes(), plan.minCapacity(), plan.maxCapacity(),
+        plan.cateringPolicy(), plan.amenities(), accessible);
+
+    return new MasterVenueDtos.SemanticSearchResponse(
+        items, counts.isEmpty() ? 0L : counts.get(0), appliedFilters);
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Filter construction ───────────────────────────────────────────────────
 
-  private long countEligible(final String city) {
-    final Long count = jdbcTemplate.queryForObject(COUNT_SQL, Long.class, city, city);
-    return count != null ? count : 0L;
+  private static Filter buildFilter(final String city,
+                                    final List<String> venueTypes,
+                                    final Integer minCapacity,
+                                    final Integer maxCapacity,
+                                    final String cateringPolicy,
+                                    final List<String> amenities,
+                                    final Boolean accessible) {
+    final StringBuilder sql = new StringBuilder();
+    final List<Binder> binders = new ArrayList<>();
+
+    if (city != null) {
+      sql.append("\n  AND LOWER(city) = LOWER(?)");
+      binders.add((ps, index) -> ps.setObject(index, city, Types.VARCHAR));
+    }
+    addArrayFilter(sql, binders, "metadata->'venue_type'", venueTypes);
+    if (minCapacity != null) {
+      sql.append("\n  AND (").append(CAPACITY_NUMERIC).append(") >= ?");
+      binders.add((ps, index) -> ps.setObject(index, minCapacity, Types.NUMERIC));
+    }
+    if (maxCapacity != null) {
+      sql.append("\n  AND (").append(CAPACITY_NUMERIC).append(") <= ?");
+      binders.add((ps, index) -> ps.setObject(index, maxCapacity, Types.NUMERIC));
+    }
+    if (cateringPolicy != null) {
+      sql.append("\n  AND metadata->'catering'->>'policy' = ?");
+      binders.add((ps, index) -> ps.setObject(index, cateringPolicy, Types.VARCHAR));
+    }
+    addArrayFilter(sql, binders, "metadata->'amenities'", amenities);
+    if (Boolean.TRUE.equals(accessible)) {
+      // Compared as text so no cast is attempted on malformed metadata.
+      sql.append("\n  AND metadata->'accessibility'->>'ada_compliant' = 'true'");
+    }
+    return new Filter(sql.toString(), List.copyOf(binders));
+  }
+
+  /**
+   * Adds an "array contains any of" predicate via {@code jsonb_exists_any}. The function form is
+   * used instead of the {@code ?|} operator because the bare {@code ?} is consumed by the JDBC
+   * driver as a bind placeholder.
+   */
+  private static void addArrayFilter(final StringBuilder sql,
+                                     final List<Binder> binders,
+                                     final String jsonPath,
+                                     final List<String> values) {
+    if (values == null || values.isEmpty()) {
+      return;
+    }
+    sql.append("\n  AND jsonb_exists_any(").append(jsonPath)
+        .append(", ARRAY[").append(joinPlaceholders(values.size())).append("]::text[])");
+    for (final String value : values) {
+      binders.add((ps, index) -> ps.setObject(index, value, Types.VARCHAR));
+    }
+  }
+
+  private static String joinPlaceholders(final int count) {
+    return String.join(", ", Collections.nCopies(count, "?"));
+  }
+
+  private static void bindAll(final PreparedStatement ps, final List<Binder> binders) throws SQLException {
+    int index = 1;
+    for (final Binder binder : binders) {
+      binder.bind(ps, index++);
+    }
   }
 
   private static java.time.Instant toInstant(final Timestamp ts) {
     return ts != null ? ts.toInstant() : null;
+  }
+
+  /** A parameterised SQL fragment and the binders that populate its placeholders, in order. */
+  private record Filter(String sql, List<Binder> binders) {
+  }
+
+  /**
+   * Sets one positional parameter; kept as a named type so a {@link SQLException} can propagate.
+   */
+  @FunctionalInterface
+  private interface Binder {
+
+    void bind(PreparedStatement ps, int index) throws SQLException;
   }
 }

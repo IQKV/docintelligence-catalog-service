@@ -230,11 +230,28 @@ public final class MasterVenueDtos {
   }
 
   /**
+   * Hard filters the AI query planner derived from a semantic search query and applied to the
+   * candidate set. Echoed back so a caller can see why the results were narrowed;
+   * {@code null} or an empty collection means the filter was not applied.
+   */
+  public record SemanticSearchFilters(
+      String city,
+      List<String> venueTypes,
+      Integer minCapacity,
+      Integer maxCapacity,
+      String cateringPolicy,
+      List<String> amenities,
+      Boolean accessible) {
+  }
+
+  /**
    * Semantic search result page.
    *
-   * @param items         ranked by similarity descending
-   * @param totalElements total number of venues in the result set (before the limit)
+   * @param items          ranked by similarity descending
+   * @param totalElements  total number of embedded venues matching the same hard filters
+   * @param appliedFilters filters the query planner applied, or an all-null filter set when none
    */
-  public record SemanticSearchResponse(List<SemanticSearchResult> items, long totalElements) {
+  public record SemanticSearchResponse(List<SemanticSearchResult> items, long totalElements,
+                                       SemanticSearchFilters appliedFilters) {
   }
 }

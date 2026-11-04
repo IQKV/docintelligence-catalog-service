@@ -83,10 +83,16 @@ public class AdminMasterVenueRestResource {
   @GetMapping("/search/semantic")
   @Operation(
       summary = "Semantic search over master venues (platform admin)",
-      description = "Embeds the query with the configured Ollama embedding model, then returns the "
-                    + "top matching venues by cosine similarity using the pgvector HNSW index. "
-                    + "Only venues that have already been embedded are considered. "
-                    + "Responds 200 with an empty list when no embeddings exist yet.")
+      description = "The query is first analysed by the AI query planner, which extracts hard "
+                    + "filters (city, venue type, capacity, catering policy, amenities, "
+                    + "accessibility) and a residual free-text query. The filters narrow the "
+                    + "candidate set as JSONB predicates and only the residual text is embedded, "
+                    + "then the top matches are returned by cosine similarity using the pgvector "
+                    + "HNSW index. Only venues that have already been embedded are considered. "
+                    + "When the planner is disabled or the chat model is unreachable the query is "
+                    + "embedded unchanged and no hard filters are applied; the filters that were "
+                    + "applied are echoed in 'appliedFilters'. Responds 200 with an empty list "
+                    + "when no embeddings exist yet.")
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "Semantic search results",
                    content = @Content(schema = @Schema(
@@ -95,7 +101,8 @@ public class AdminMasterVenueRestResource {
   public ResponseEntity<MasterVenueDtos.SemanticSearchResponse> semanticSearch(
       @Parameter(description = "Natural-language search query", required = true)
       @RequestParam final String q,
-      @Parameter(description = "Optional exact city filter, compared case-insensitively")
+      @Parameter(description = "Optional exact city filter, compared case-insensitively; "
+                               + "overrides any city the AI planner extracts")
       @RequestParam(required = false) final String city,
       @Parameter(description = "Maximum number of results to return (default 20, max 100)")
       @RequestParam(defaultValue = "20") final int limit) {

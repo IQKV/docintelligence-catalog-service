@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Backs the JSONB array-containment predicates the AI query planner produces
+         (jsonb_exists_any on metadata->'venue_type' and metadata->'amenities').
+         jsonb_ops is required — jsonb_path_ops does not support ?| / ?&.
+         These indexes are expression indexes, not a whole-column index, because the
+         planner filters on sub-documents rather than the metadata column itself. -->
+    <changeSet id="20261104120000-add-master-venue-metadata-gin" author="iqkv">
+
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_master_venue_metadata_venue_type_gin
+            ON public.master_venue
+            USING gin ((metadata->'venue_type') jsonb_ops)
+        </sql>
+
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_master_venue_metadata_amenities_gin
+            ON public.master_venue
+            USING gin ((metadata->'amenities') jsonb_ops)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS public.idx_master_venue_metadata_amenities_gin</sql>
+            <sql>DROP INDEX IF EXISTS public.idx_master_venue_metadata_venue_type_gin</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>
