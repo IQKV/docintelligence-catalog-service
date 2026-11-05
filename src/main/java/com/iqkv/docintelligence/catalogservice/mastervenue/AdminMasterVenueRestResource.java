@@ -71,17 +71,23 @@ public class AdminMasterVenueRestResource {
   @Operation(
       summary = "Search master venues (platform admin)",
       description = "Keyword search over name, address and city, with an optional exact-city filter "
-                    + "and offset pagination. Returns the full record, including curation fields.")
+                    + "and offset pagination. Supports optional sort by name (asc/desc); omitting "
+                    + "sortBy returns venues ordered by most recently added. "
+                    + "Returns the full record, including curation fields.")
   public ResponseEntity<MasterVenueDtos.AdminMasterVenueListResponse> search(
       @Parameter(description = "Free-text keyword matched against name, address and city")
       @RequestParam(required = false) final String search,
       @Parameter(description = "Exact city filter, compared case-insensitively")
       @RequestParam(required = false) final String city,
+      @Parameter(description = "Sort field: 'name' or omit for recently added (default)")
+      @RequestParam(required = false) final String sortBy,
+      @Parameter(description = "Sort direction: 'asc' (default when sortBy is set) or 'desc'")
+      @RequestParam(required = false) final String sortDir,
       @Parameter(description = "Maximum number of venues to return")
       @RequestParam(defaultValue = "20") final int limit,
       @Parameter(description = "Zero-based row offset")
       @RequestParam(defaultValue = "0") final int offset) {
-    return ResponseEntity.ok(masterVenueService.searchVenues(search, city, limit, offset));
+    return ResponseEntity.ok(masterVenueService.searchVenues(search, city, sortBy, sortDir, limit, offset));
   }
 
   @GetMapping("/search/semantic")

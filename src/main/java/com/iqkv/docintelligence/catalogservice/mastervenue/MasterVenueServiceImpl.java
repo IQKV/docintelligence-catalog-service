@@ -55,8 +55,9 @@ public class MasterVenueServiceImpl implements MasterVenueService {
 
   @Override
   public MasterVenueDtos.MasterVenueListResponse searchPublicVenues(final String search, final String city,
+                                                                    final String sortBy, final String sortDir,
                                                                     final int limit, final int offset) {
-    final var venues = masterVenueMapper.search(search, city, limit, offset);
+    final var venues = masterVenueMapper.search(search, city, sortBy, sortDir, limit, offset);
     return new MasterVenueDtos.MasterVenueListResponse(
         venues.stream().map(MasterVenueDtoMapper::toSummaryView).toList(),
         masterVenueMapper.countSearch(search, city)
@@ -96,8 +97,9 @@ public class MasterVenueServiceImpl implements MasterVenueService {
 
   @Override
   public MasterVenueDtos.AdminMasterVenueListResponse searchVenues(final String search, final String city,
+                                                                   final String sortBy, final String sortDir,
                                                                    final int limit, final int offset) {
-    final var venues = masterVenueMapper.search(search, city, limit, offset);
+    final var venues = masterVenueMapper.search(search, city, sortBy, sortDir, limit, offset);
     return new MasterVenueDtos.AdminMasterVenueListResponse(
         venues.stream().map(MasterVenueDtoMapper::toResponse).toList(),
         masterVenueMapper.countSearch(search, city)

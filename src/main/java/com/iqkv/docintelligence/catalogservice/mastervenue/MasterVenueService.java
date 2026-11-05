@@ -31,7 +31,7 @@ import com.iqkv.docintelligence.catalogservice.mastervenue.dto.MasterVenueDtos;
  */
 public interface MasterVenueService {
 
-  MasterVenueDtos.MasterVenueListResponse searchPublicVenues(String search, String city, int limit, int offset);
+  MasterVenueDtos.MasterVenueListResponse searchPublicVenues(String search, String city, String sortBy, String sortDir, int limit, int offset);
 
   MasterVenueDtos.MasterVenuePublicResponse getPublicVenue(UUID id);
 
@@ -39,7 +39,7 @@ public interface MasterVenueService {
 
   MasterVenueDtos.MasterVenueAssetListResponse listPublicVenuePhotos(UUID id);
 
-  MasterVenueDtos.AdminMasterVenueListResponse searchVenues(String search, String city, int limit, int offset);
+  MasterVenueDtos.AdminMasterVenueListResponse searchVenues(String search, String city, String sortBy, String sortDir, int limit, int offset);
 
   MasterVenueDtos.MasterVenueResponse getVenue(UUID id);
 
