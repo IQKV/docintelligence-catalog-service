@@ -323,11 +323,11 @@ class MasterVenueServiceImplTest {
     venue.setCity("Kyiv");
     venue.setMetadata("{\"_schema_version\":1}");
     venue.setConfidence(new BigDecimal("0.75"));
-    when(masterVenueMapper.search("grand", "Kyiv", 20, 0)).thenReturn(List.of(venue));
+    when(masterVenueMapper.search("grand", "Kyiv", null, null, 20, 0)).thenReturn(List.of(venue));
     when(masterVenueMapper.countSearch("grand", "Kyiv")).thenReturn(1L);
 
     // Act
-    final var response = masterVenueService.searchPublicVenues("grand", "Kyiv", 20, 0);
+    final var response = masterVenueService.searchPublicVenues("grand", "Kyiv", null, null, 20, 0);
 
     // Assert
     assertThat(response.totalElements()).isEqualTo(1L);
