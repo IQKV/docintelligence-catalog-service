@@ -16,9 +16,9 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
-import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
-
 import java.util.UUID;
+
+import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 
 /**
  * Platform-admin use cases over tenant venue records.

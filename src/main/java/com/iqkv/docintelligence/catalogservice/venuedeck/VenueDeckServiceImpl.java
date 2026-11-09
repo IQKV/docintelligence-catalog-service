@@ -16,6 +16,10 @@
 
 package com.iqkv.docintelligence.catalogservice.venuedeck;
 
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.ObjectStorageConfigurationProperties;
 import com.iqkv.docintelligence.catalogservice.shared.exception.InvalidUploadRequestException;
 import com.iqkv.docintelligence.catalogservice.venuedeck.dto.VenueDeckDtoMapper;
@@ -23,16 +27,10 @@ import com.iqkv.docintelligence.catalogservice.venuedeck.dto.VenueDeckDtos;
 import com.iqkv.docintelligence.venue.VenueDocument;
 import com.iqkv.docintelligence.venue.VenueDocumentMapper;
 import com.iqkv.foundation.tenancy.TenantContext;
-
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
-
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;

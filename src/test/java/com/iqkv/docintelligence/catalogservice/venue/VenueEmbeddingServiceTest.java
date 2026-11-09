@@ -24,11 +24,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.iqkv.docintelligence.venue.Venue;
-import com.iqkv.docintelligence.venue.VenueMapper;
-
 import java.util.UUID;
 
+import com.iqkv.docintelligence.venue.Venue;
+import com.iqkv.docintelligence.venue.VenueMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

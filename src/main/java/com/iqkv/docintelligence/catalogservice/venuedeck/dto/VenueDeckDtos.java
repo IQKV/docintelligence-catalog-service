@@ -19,7 +19,6 @@ package com.iqkv.docintelligence.catalogservice.venuedeck.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

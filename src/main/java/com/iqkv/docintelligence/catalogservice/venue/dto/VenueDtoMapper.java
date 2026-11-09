@@ -16,10 +16,10 @@
 
 package com.iqkv.docintelligence.catalogservice.venue.dto;
 
-import com.iqkv.docintelligence.venue.Venue;
-
 import java.math.BigDecimal;
 import java.util.UUID;
+
+import com.iqkv.docintelligence.venue.Venue;
 
 /**
  * Static translation between {@link Venue} rows and the admin venue DTOs.

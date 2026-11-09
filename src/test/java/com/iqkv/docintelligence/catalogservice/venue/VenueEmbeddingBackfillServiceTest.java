@@ -21,15 +21,14 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.iqkv.docintelligence.catalogservice.infrastructure.persistence.AllTenantsKeyProvider;
-import com.iqkv.docintelligence.venue.Venue;
-import com.iqkv.docintelligence.venue.VenueMapper;
-import com.iqkv.foundation.tenancy.TenantContext;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.infrastructure.persistence.AllTenantsKeyProvider;
+import com.iqkv.docintelligence.venue.Venue;
+import com.iqkv.docintelligence.venue.VenueMapper;
+import com.iqkv.foundation.tenancy.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -23,23 +23,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.ObjectStorageConfigurationProperties;
 import com.iqkv.docintelligence.catalogservice.shared.exception.InvalidUploadRequestException;
 import com.iqkv.docintelligence.catalogservice.venuedeck.dto.VenueDeckDtos;
 import com.iqkv.docintelligence.venue.VenueDocument;
 import com.iqkv.docintelligence.venue.VenueDocumentMapper;
 import com.iqkv.foundation.tenancy.TenantContext;
-
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

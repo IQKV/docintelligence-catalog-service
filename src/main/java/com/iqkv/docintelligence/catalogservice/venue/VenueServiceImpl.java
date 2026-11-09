@@ -16,13 +16,12 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
+import java.util.UUID;
+
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtoMapper;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import com.iqkv.docintelligence.venue.Venue;
 import com.iqkv.docintelligence.venue.VenueMapper;
-
-import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
