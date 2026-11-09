@@ -17,6 +17,8 @@
 package com.iqkv.docintelligence.catalogservice.venue.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -110,6 +112,37 @@ public final class VenueDtos {
   }
 
   /**
+   * Tenant write payload for {@code POST /api/v1/catalog/venues} (create) and
+   * {@code PUT /api/v1/catalog/venues/{id}} (full replace). Carries only the fields a tenant may
+   * manage — curation fields ({@code metadata}, {@code confidence}, {@code source}) are not
+   * accepted; the service applies ingestion defaults on create and leaves them untouched on
+   * replace.
+   */
+  public record VenuePublicWriteRequest(
+      @NotBlank String name,
+      String address,
+      String city,
+      BigDecimal locationLat,
+      BigDecimal locationLng,
+      UUID masterVenueId) {
+  }
+
+  /**
+   * Tenant partial-update payload. A {@code null} field means "leave unchanged"; there is no
+   * way to clear a field with this request, which is the documented limitation of a merge-style
+   * PATCH. In particular {@code masterVenueId} can be set but not cleared to {@code null} via
+   * PATCH.
+   */
+  public record VenuePublicPatchRequest(
+      String name,
+      String address,
+      String city,
+      BigDecimal locationLat,
+      BigDecimal locationLng,
+      UUID masterVenueId) {
+  }
+
+  /**
    * Tenant-facing view of a single venue — the safe projection. Curation fields
    * ({@code metadata}, {@code confidence}, {@code source}) are not exposed; the optional
    * {@code masterVenueId} relation key is kept so a member can see whether the venue is linked
@@ -125,6 +158,15 @@ public final class VenueDtos {
       UUID masterVenueId,
       Instant createdAt,
       Instant updatedAt) {
+  }
+
+  /**
+   * Request body for the tenant bulk-delete endpoint — a capped list of venue ids. The delete
+   * is idempotent: ids that match no venue are silently ignored, so a repeated request is
+   * always safe.
+   */
+  public record VenueBulkDeleteRequest(
+      @NotEmpty @Size(max = 100) List<UUID> ids) {
   }
 
   /**

@@ -16,6 +16,7 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
+import jakarta.validation.Valid;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
@@ -28,21 +29,30 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Tenant-facing venue surface — search and read only.
+ * Tenant-facing venue surface — full CRUD over the tenant's own venue records.
  *
- * <p>Writes live exclusively on {@link AdminVenueRestResource}. Every response here uses the safe
- * projection: curation fields such as {@code confidence}, {@code source} and the raw
- * {@code metadata} document are not exposed; the optional {@code masterVenueId} relation key is
- * kept so a member can see whether a venue is linked to a master catalog entry.
+ * <p>Read endpoints ({@code GET}) require only the {@code MEMBER} authority. Write endpoints
+ * ({@code POST}, {@code PUT}, {@code PATCH}, {@code DELETE}) require {@code TENANT_OWNER} or
+ * {@code ADMIN} so that ordinary members remain read-only.
+ *
+ * <p>Every response uses the safe projection: curation fields ({@code confidence}, {@code source}
+ * and the raw {@code metadata} document) are not exposed. The optional {@code masterVenueId}
+ * relation key is kept so the caller can see whether a venue is linked to a master catalog entry.
  *
  * <p>The tenant context is resolved for these paths by {@code TenantExtractionFilter} from the
  * {@code X-Tenant-ID} header or the JWT {@code tenant_id} claim, so the
@@ -51,9 +61,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/catalog/venues")
-@Tag(name = "Venues", description = "Read-only access to the tenant's own venue records")
+@Tag(name = "Venues", description = "Full CRUD over the tenant's own venue records")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAuthority('MEMBER')")
 public class VenueRestResource {
 
   private final VenueService venueService;
@@ -62,7 +71,10 @@ public class VenueRestResource {
     this.venueService = venueService;
   }
 
+  // ─── Read surface (MEMBER) ────────────────────────────────────────────────
+
   @GetMapping
+  @PreAuthorize("hasAuthority('MEMBER')")
   @Operation(
       summary = "Search tenant venues",
       description = "Keyword search over name, address and city, with an optional exact-city "
@@ -70,7 +82,7 @@ public class VenueRestResource {
                     + "omitting sortBy returns venues ordered by most recently added. "
                     + "Returns the safe projection only.")
   @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
-             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+             description = "8-char alphanumeric tenant key. "
                            + "Can be omitted when the JWT carries a tenant_id claim.")
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "Matching tenant venues",
@@ -96,12 +108,13 @@ public class VenueRestResource {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('MEMBER')")
   @Operation(
       summary = "Get a tenant venue",
       description = "Returns the safe projection of the given tenant venue. "
                     + "Responds 404 when the venue does not exist.")
   @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
-             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+             description = "8-char alphanumeric tenant key. "
                            + "Can be omitted when the JWT carries a tenant_id claim.")
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "Venue found",
@@ -114,5 +127,130 @@ public class VenueRestResource {
   public ResponseEntity<VenueDtos.VenuePublicResponse> getById(
       @Parameter(description = "Venue UUID") @PathVariable final UUID id) {
     return ResponseEntity.ok(venueService.getPublicVenue(id));
+  }
+
+  // ─── Write surface (TENANT_OWNER / ADMIN) ────────────────────────────────
+
+  @PostMapping
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Create a tenant venue",
+      description = "Creates a venue in the active tenant schema. Curation fields (metadata, "
+                    + "confidence, source) are initialised to safe defaults and are not "
+                    + "accepted in the request body. masterVenueId links the venue to a "
+                    + "master catalog entry when provided. Returns 201 with the safe projection.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "201", description = "Venue created",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Request validation failed or tenant ID unresolvable",
+                   content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403",
+                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicResponse> create(
+      @Valid @RequestBody final VenueDtos.VenuePublicWriteRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(venueService.createPublicVenue(request));
+  }
+
+  @PutMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Replace a tenant venue",
+      description = "Full replace of the tenant-visible fields. Curation fields are not "
+                    + "modified. Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Venue replaced",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Request validation failed or tenant ID unresolvable",
+                   content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403",
+                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicResponse> replace(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @Valid @RequestBody final VenueDtos.VenuePublicWriteRequest request) {
+    return ResponseEntity.ok(venueService.replacePublicVenue(id, request));
+  }
+
+  @PatchMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Partially update a tenant venue",
+      description = "Only the fields present (non-null) in the request are overwritten. "
+                    + "Curation fields are never modified. Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Venue updated",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403",
+                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicResponse> patch(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @RequestBody final VenueDtos.VenuePublicPatchRequest request) {
+    return ResponseEntity.ok(venueService.patchPublicVenue(id, request));
+  }
+
+  @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Delete a tenant venue",
+      description = "Permanently deletes the venue from the active tenant schema. "
+                    + "Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "Venue deleted", content = @Content),
+      @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403",
+                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<Void> delete(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id) {
+    venueService.deletePublicVenue(id);
+    return ResponseEntity.noContent().build();
+  }
+
+  @DeleteMapping
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Bulk delete tenant venues",
+      description = "Permanently deletes every venue whose id appears in the request body, in a "
+                    + "single request. Deletion is idempotent: ids that match no venue are "
+                    + "silently ignored, so repeating the request is safe. The list is capped at "
+                    + "100 ids. Responds 204 with no body.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "Venues deleted", content = @Content),
+      @ApiResponse(responseCode = "400",
+                   description = "Request validation failed — the id list is empty or holds more than 100 ids",
+                   content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403",
+                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content)
+  })
+  public ResponseEntity<Void> deleteBulk(
+      @Valid @RequestBody final VenueDtos.VenueBulkDeleteRequest request) {
+    venueService.deletePublicVenues(request.ids());
+    return ResponseEntity.noContent().build();
   }
 }

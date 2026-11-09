@@ -47,5 +47,15 @@ public interface VenueService {
 
   VenueDtos.VenuePublicResponse getPublicVenue(UUID id);
 
+  VenueDtos.VenuePublicResponse createPublicVenue(VenueDtos.VenuePublicWriteRequest request);
+
+  VenueDtos.VenuePublicResponse replacePublicVenue(UUID id, VenueDtos.VenuePublicWriteRequest request);
+
+  VenueDtos.VenuePublicResponse patchPublicVenue(UUID id, VenueDtos.VenuePublicPatchRequest request);
+
+  void deletePublicVenue(UUID id);
+
+  void deletePublicVenues(java.util.List<UUID> ids);
+
   VenueDtos.VenueSemanticSearchResponse semanticSearch(String query, String city, int limit);
 }

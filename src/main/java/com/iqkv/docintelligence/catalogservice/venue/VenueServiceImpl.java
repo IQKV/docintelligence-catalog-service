@@ -16,6 +16,8 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtoMapper;
@@ -110,16 +112,60 @@ public class VenueServiceImpl implements VenueService {
 
   @Override
   @Transactional(readOnly = true)
-  public VenueDtos.VenueListResponse searchPublicVenues(final String search, final String city,
-                                                         final String sortBy, final String sortDir,
-                                                         final int limit, final int offset) {
-    return searchVenues(search, city, sortBy, sortDir, limit, offset);
+  public VenueDtos.VenuePublicResponse getPublicVenue(final UUID id) {
+    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+  }
+
+  @Override
+  public VenueDtos.VenuePublicResponse createPublicVenue(final VenueDtos.VenuePublicWriteRequest request) {
+    final Venue venue = VenueDtoMapper.toPublicEntity(request);
+    // Apply ingestion defaults for curation fields the tenant does not supply.
+    venue.setMetadata("{\"_schema_version\":1}");
+    venue.setConfidence(BigDecimal.ONE);
+    venue.setSource("tenant");
+    venueMapper.insert(venue);
+    embeddingService.embed(venue);
+    return VenueDtoMapper.toPublicResponse(requireVenue(venue.getId()));
+  }
+
+  @Override
+  public VenueDtos.VenuePublicResponse replacePublicVenue(final UUID id,
+                                                           final VenueDtos.VenuePublicWriteRequest request) {
+    final Venue venue = requireVenue(id);
+    VenueDtoMapper.applyPublicWrite(venue, request);
+    venueMapper.update(venue);
+    embeddingService.embed(venue);
+    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+  }
+
+  @Override
+  public VenueDtos.VenuePublicResponse patchPublicVenue(final UUID id,
+                                                         final VenueDtos.VenuePublicPatchRequest request) {
+    final Venue venue = requireVenue(id);
+    VenueDtoMapper.applyPublicPatch(venue, request);
+    venueMapper.update(venue);
+    embeddingService.embed(venue);
+    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+  }
+
+  @Override
+  public void deletePublicVenue(final UUID id) {
+    requireVenue(id);
+    venueMapper.deleteById(id);
+  }
+
+  @Override
+  public void deletePublicVenues(final List<UUID> ids) {
+    // No existence check: DELETE of an unknown id is a no-op, which is what makes the batch idempotent.
+    ids.forEach(venueMapper::deleteById);
   }
 
   @Override
   @Transactional(readOnly = true)
-  public VenueDtos.VenuePublicResponse getPublicVenue(final UUID id) {
-    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+  public VenueDtos.VenueListResponse searchPublicVenues(final String search, final String city,
+                                                         final String sortBy, final String sortDir,
+                                                         final int limit, final int offset) {
+    return searchVenues(search, city, sortBy, sortDir, limit, offset);
   }
 
   @Override
