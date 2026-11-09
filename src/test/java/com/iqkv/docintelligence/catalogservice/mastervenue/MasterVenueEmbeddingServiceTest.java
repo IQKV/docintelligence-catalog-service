@@ -27,6 +27,7 @@ import java.util.UUID;
 
 import com.iqkv.docintelligence.venue.MasterVenue;
 import com.iqkv.docintelligence.venue.MasterVenueMapper;
+import com.iqkv.docintelligence.venue.VenueEmbeddingText;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -90,7 +91,7 @@ class MasterVenueEmbeddingServiceTest {
   }
 
   @Test
-  @DisplayName("buildEmbeddingText joins name, address, city and metadata")
+  @DisplayName("VenueEmbeddingText joins name, address, city and metadata")
   void shouldBuildEmbeddingText() {
     // Arrange
     final var venue = new MasterVenue();
@@ -100,7 +101,7 @@ class MasterVenueEmbeddingServiceTest {
     venue.setMetadata("{\"_schema_version\":1}");
 
     // Act & Assert
-    assertThat(MasterVenueEmbeddingService.buildEmbeddingText(venue))
+    assertThat(VenueEmbeddingText.build(venue))
         .isEqualTo("Grand Hall. 1 Main St. Kyiv. {\"_schema_version\":1}");
   }
 }

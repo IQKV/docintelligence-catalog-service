@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.venue.Venue;
+import com.iqkv.docintelligence.venue.VenueEmbeddingText;
 import com.iqkv.docintelligence.venue.VenueMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,7 +90,7 @@ class VenueEmbeddingServiceTest {
   }
 
   @Test
-  @DisplayName("buildEmbeddingText concatenates name, address, city and metadata")
+  @DisplayName("VenueEmbeddingText concatenates name, address, city and metadata")
   void buildEmbeddingTextConcatenatesFields() {
     // Arrange
     final Venue venue = new Venue();
@@ -99,7 +100,7 @@ class VenueEmbeddingServiceTest {
     venue.setMetadata("{\"_schema_version\":1}");
 
     // Act
-    final String text = VenueEmbeddingService.buildEmbeddingText(venue);
+    final String text = VenueEmbeddingText.build(venue);
 
     // Assert
     assertThat(text).isEqualTo("Grand Hall. 1 Rue de la Paix. Paris. {\"_schema_version\":1}");

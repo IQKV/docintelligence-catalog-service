@@ -19,14 +19,12 @@ package com.iqkv.docintelligence.catalogservice;
 import java.util.List;
 import java.util.TimeZone;
 
-import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Entry point for the Catalog Service.
@@ -36,8 +34,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan
-@EnableScheduling
-@EnableSchedulerLock(defaultLockAtMostFor = "PT55M")
 public class CatalogServiceApplication {
 
   private static final Logger log = LoggerFactory.getLogger(CatalogServiceApplication.class);

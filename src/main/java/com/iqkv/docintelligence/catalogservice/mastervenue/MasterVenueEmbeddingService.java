@@ -18,6 +18,7 @@ package com.iqkv.docintelligence.catalogservice.mastervenue;
 
 import com.iqkv.docintelligence.venue.MasterVenue;
 import com.iqkv.docintelligence.venue.MasterVenueMapper;
+import com.iqkv.docintelligence.venue.VenueEmbeddingText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -62,7 +63,7 @@ class MasterVenueEmbeddingService {
    */
   boolean embed(final MasterVenue venue) {
     try {
-      final float[] vector = embeddingModel.embed(buildEmbeddingText(venue));
+      final float[] vector = embeddingModel.embed(VenueEmbeddingText.build(venue));
       masterVenueMapper.updateEmbedding(venue.getId(), vector);
       log.debug("embedded venue {} ({} dims)", venue.getId(), vector.length);
       return true;
@@ -71,27 +72,5 @@ class MasterVenueEmbeddingService {
           venue.getId(), ex.getMessage());
       return false;
     }
-  }
-
-  /**
-   * Builds the text fed to the embedding model.
-   * Includes name, address, city, and raw metadata JSON so the model captures
-   * venue type, amenities, capacity, catering, and restrictions.
-   */
-  static String buildEmbeddingText(final MasterVenue venue) {
-    final var sb = new StringBuilder();
-    if (venue.getName() != null) {
-      sb.append(venue.getName()).append(". ");
-    }
-    if (venue.getAddress() != null) {
-      sb.append(venue.getAddress()).append(". ");
-    }
-    if (venue.getCity() != null) {
-      sb.append(venue.getCity()).append(". ");
-    }
-    if (venue.getMetadata() != null && !venue.getMetadata().isBlank()) {
-      sb.append(venue.getMetadata());
-    }
-    return sb.toString().strip();
   }
 }

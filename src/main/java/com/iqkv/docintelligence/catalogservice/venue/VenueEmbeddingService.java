@@ -17,6 +17,7 @@
 package com.iqkv.docintelligence.catalogservice.venue;
 
 import com.iqkv.docintelligence.venue.Venue;
+import com.iqkv.docintelligence.venue.VenueEmbeddingText;
 import com.iqkv.docintelligence.venue.VenueMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +31,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>Called after every create, replace and patch in {@link VenueServiceImpl} so an edited venue
  * is never left with a vector that still describes its old name, address, city or metadata. The
- * {@link VenueEmbeddingBackfillService} scheduler only recovers rows whose {@code embedding}
- * column is {@code NULL}, so without this refresh a changed venue would keep a stale vector.
+ * backfill scheduler in {@code docintelligence-catalog-processing-worker} only recovers rows whose
+ * {@code embedding} column is {@code NULL}, so without this refresh a changed venue would keep a
+ * stale vector.
  *
  * <p>Failures are logged and swallowed: a slow or unavailable Ollama instance never blocks the
  * write; the row stays searchable via keyword search and the column keeps its previous value
@@ -61,7 +63,7 @@ class VenueEmbeddingService {
    */
   boolean embed(final Venue venue) {
     try {
-      final float[] vector = embeddingModel.embed(buildEmbeddingText(venue));
+      final float[] vector = embeddingModel.embed(VenueEmbeddingText.build(venue));
       venueMapper.updateEmbedding(venue.getId(), vector);
       log.debug("embedded venue {} ({} dims)", venue.getId(), vector.length);
       return true;
@@ -70,27 +72,5 @@ class VenueEmbeddingService {
           venue.getId(), ex.getMessage());
       return false;
     }
-  }
-
-  /**
-   * Builds the text fed to the embedding model.
-   * Includes name, address, city, and raw metadata JSON so the model captures
-   * venue type, amenities, capacity, catering, and restrictions.
-   */
-  static String buildEmbeddingText(final Venue venue) {
-    final var sb = new StringBuilder();
-    if (venue.getName() != null) {
-      sb.append(venue.getName()).append(". ");
-    }
-    if (venue.getAddress() != null) {
-      sb.append(venue.getAddress()).append(". ");
-    }
-    if (venue.getCity() != null) {
-      sb.append(venue.getCity()).append(". ");
-    }
-    if (venue.getMetadata() != null && !venue.getMetadata().isBlank()) {
-      sb.append(venue.getMetadata());
-    }
-    return sb.toString().strip();
   }
 }
