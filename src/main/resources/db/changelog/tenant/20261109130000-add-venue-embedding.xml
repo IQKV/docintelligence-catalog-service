@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Tenant venue embeddings — semantic / vector search for tenant venues.
+         Requires the pgvector extension (pgvector/pgvector:pg17 image already in stack).
+         Dimension 768 matches nomic-embed-text; change the constant if the model changes.
+         Populated asynchronously by VenueEmbeddingService on admin writes and by the
+         VenueEmbeddingBackfillService scheduler. NULL = not yet embedded — excluded from
+         vector search, still in keyword search.
+
+         Unqualified 'venues' resolves to the active t_{tenantKey} schema because
+         TenantLiquibaseRunner sets search_path before running these changesets. -->
+
+    <changeSet id="20261109130000-add-venue-embedding" author="iqkv">
+
+        <sql>ALTER TABLE venues ADD COLUMN IF NOT EXISTS embedding vector(768)</sql>
+
+        <!-- HNSW index for fast approximate nearest-neighbour with cosine distance.
+             m=16 / ef_construction=64 are conservative defaults; tune for recall vs speed. -->
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_venues_embedding_hnsw
+            ON venues
+            USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_venues_embedding_hnsw</sql>
+            <sql>ALTER TABLE venues DROP COLUMN IF EXISTS embedding</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>
