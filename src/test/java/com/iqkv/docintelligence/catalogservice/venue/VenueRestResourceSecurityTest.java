@@ -49,7 +49,7 @@ class VenueRestResourceSecurityTest {
   private static final String TENANT_PATH = "/api/v1/catalog/venues";
   private static final String TENANT_HEADER = "X-Tenant-ID";
   private static final String TENANT_KEY = "xk7f2b9a";
-  private static final UUID_ZERO = "00000000-0000-0000-0000-000000000001";
+  private static final String UUID_ZERO = "00000000-0000-0000-0000-000000000001";
 
   @Autowired
   private WebApplicationContext webApplicationContext;

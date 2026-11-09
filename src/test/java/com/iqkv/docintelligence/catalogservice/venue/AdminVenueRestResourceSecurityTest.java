@@ -48,7 +48,7 @@ import org.springframework.web.context.WebApplicationContext;
 class AdminVenueRestResourceSecurityTest {
 
   private static final String ADMIN_PATH = "/api/v1/catalog/admin/xk7f2b9a/venues";
-  private static final UUID_ZERO = "00000000-0000-0000-0000-000000000001";
+  private static final String UUID_ZERO = "00000000-0000-0000-0000-000000000001";
 
   @Autowired
   private WebApplicationContext webApplicationContext;
