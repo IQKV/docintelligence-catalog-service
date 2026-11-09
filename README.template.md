@@ -51,19 +51,19 @@ Read-only access to the tenant's own venue records. Requires the `MEMBER` author
 
 | Method | Path           | Auth         | Description                                                                            |
 | :----- | :------------- | :----------- | :------------------------------------------------------------------------------------- |
-| `GET`  | `/venues`       | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
+| `GET`  | `/venues`      | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
 | `GET`  | `/venues/{id}` | JWT `MEMBER` | Fetch a single tenant venue by UUID                                                    |
 
 ### Venue decks
 
 Two-phase presigned upload for tenant venue deck PDFs, plus list and detail reads. Requires the `MEMBER` authority; tenant rows are isolated by tenant schema.
 
-| Method   | Path                        | Auth         | Description                                                                                                    |
-| :------- | :-------------------------- | :----------- | :------------------------------------------------------------------------------------------------------------- |
-| `POST`   | `/venue-decks/initiate`     | JWT `MEMBER` | Validate the declared file (`fileName`, `contentType`, `sizeBytes`) and return a presigned `PUT` URL + `documentId` + `objectKey` |
-| `POST`   | `/venue-decks/{id}/confirm` | JWT `MEMBER` | Validate the object key and the uploaded object (`statObject`), persist file metadata with status `UPLOADED` |
-| `GET`    | `/venue-decks`              | JWT `MEMBER` | List venue decks of the active tenant, ordered by most recently created, paginated via `limit` / `offset`    |
-| `GET`    | `/venue-decks/{id}`         | JWT `MEMBER` | Fetch a single venue deck by UUID                                                                              |
+| Method | Path                        | Auth         | Description                                                                                                                       |
+| :----- | :-------------------------- | :----------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/venue-decks/initiate`     | JWT `MEMBER` | Validate the declared file (`fileName`, `contentType`, `sizeBytes`) and return a presigned `PUT` URL + `documentId` + `objectKey` |
+| `POST` | `/venue-decks/{id}/confirm` | JWT `MEMBER` | Validate the object key and the uploaded object (`statObject`), persist file metadata with status `UPLOADED`                      |
+| `GET`  | `/venue-decks`              | JWT `MEMBER` | List venue decks of the active tenant, ordered by most recently created, paginated via `limit` / `offset`                         |
+| `GET`  | `/venue-decks/{id}`         | JWT `MEMBER` | Fetch a single venue deck by UUID                                                                                                 |
 
 The client uploads directly to MinIO using the presigned `PUT` URL returned by `initiate`, then calls `confirm` with the `objectKey` and `fileName`. The object key is tenant-scoped (`docintelligence/tenant/{tenantKey}/venue-decks/{documentId}`), so confirm validates ownership by exact match. A document carries the upload lifecycle status `UPLOADED`, later transitioning to `PARSING` → `EXTRACTED`, or `FAILED`. `initiate` and `confirm` answer `400` for an unsupported content type, an oversized file, an object key mismatch, or a missing storage object; `{id}` paths answer `404` when the deck does not exist.
 
@@ -89,15 +89,15 @@ Full CRUD over the master venue catalog, using the admin projection (all curatio
 
 Full CRUD over tenant venue records. Requires the `PLATFORM_ADMIN` authority; each request is scoped to the tenant in the `{tenantKey}` path variable (`/api/v1/catalog/admin/{tenantKey}/venues`).
 
-| Method   | Path                                   | Auth                 | Description                                                              |
-| :------- | :------------------------------------- | :------------------- | :----------------------------------------------------------------------- |
-| `GET`    | `/admin/{tenantKey}/venues`            | JWT `PLATFORM_ADMIN` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
-| `GET`    | `/admin/{tenantKey}/venues/search/semantic` | JWT `PLATFORM_ADMIN` | Semantic (vector) search over tenant venues — AI query planner + cosine similarity |
-| `GET`    | `/admin/{tenantKey}/venues/{id}`       | JWT `PLATFORM_ADMIN` | Fetch a single tenant venue by UUID                                      |
-| `POST`   | `/admin/{tenantKey}/venues`            | JWT `PLATFORM_ADMIN` | Create a tenant venue; returns `201`                                     |
-| `PUT`    | `/admin/{tenantKey}/venues/{id}`       | JWT `PLATFORM_ADMIN` | Replace a tenant venue in full                                            |
-| `PATCH`  | `/admin/{tenantKey}/venues/{id}`       | JWT `PLATFORM_ADMIN` | Partially update a tenant venue; omitted fields keep their current value |
-| `DELETE` | `/admin/{tenantKey}/venues/{id}`      | JWT `PLATFORM_ADMIN` | Delete a tenant venue; returns `204`                                     |
+| Method   | Path                                        | Auth                 | Description                                                                            |
+| :------- | :------------------------------------------ | :------------------- | :------------------------------------------------------------------------------------- |
+| `GET`    | `/admin/{tenantKey}/venues`                 | JWT `PLATFORM_ADMIN` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
+| `GET`    | `/admin/{tenantKey}/venues/search/semantic` | JWT `PLATFORM_ADMIN` | Semantic (vector) search over tenant venues — AI query planner + cosine similarity     |
+| `GET`    | `/admin/{tenantKey}/venues/{id}`            | JWT `PLATFORM_ADMIN` | Fetch a single tenant venue by UUID                                                    |
+| `POST`   | `/admin/{tenantKey}/venues`                 | JWT `PLATFORM_ADMIN` | Create a tenant venue; returns `201`                                                   |
+| `PUT`    | `/admin/{tenantKey}/venues/{id}`            | JWT `PLATFORM_ADMIN` | Replace a tenant venue in full                                                         |
+| `PATCH`  | `/admin/{tenantKey}/venues/{id}`            | JWT `PLATFORM_ADMIN` | Partially update a tenant venue; omitted fields keep their current value               |
+| `DELETE` | `/admin/{tenantKey}/venues/{id}`            | JWT `PLATFORM_ADMIN` | Delete a tenant venue; returns `204`                                                   |
 
 A venue carries an optional `masterVenueId` relation key to a master catalog record. `POST` and `PUT` take a write payload (`name`, `address`, `city`, `locationLat`, `locationLng`, `metadata`, `confidence`, `source`, `masterVenueId`); `PATCH` takes the same shape with every field optional. Omitted `metadata` defaults to the canonical empty document and omitted `confidence` to `1.0`. `{id}` paths answer `404` when the venue does not exist in that tenant schema. `GET .../search/semantic` runs an AI query planner that extracts hard filters (city, venue type, capacity, catering, amenities, accessibility) and ranks the embedded venues by cosine similarity using the per-tenant pgvector index; only venues already carrying an embedding are considered, and a disabled or unreachable planner falls back to embedding the raw query with no filters.
 
