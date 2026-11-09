@@ -21,8 +21,8 @@ docintelligence-catalog-service/
 ├── src/
 │   ├── main/
 │   │   ├── java/com/iqkv/docintelligence/catalogservice/
-│   │   │   ├── <feature-slice>/      # One package per vertical slice (e.g. mastervenue, ping)
-│   │   │   │   ├── <Feature>RestResource.java       # Member/public REST surface
+│   │   │   ├── <feature-slice>/      # One package per vertical slice (e.g. mastervenue, venuedeck, ping)
+│   │   │   │   ├── <Feature>RestResource.java       # Tenant/public REST surface (TENANT_OWNER/MEMBER)
 │   │   │   │   ├── Admin<Feature>RestResource.java  # Admin REST surface (PLATFORM_ADMIN)
 │   │   │   │   ├── <Feature>Service.java            # Service contract
 │   │   │   │   ├── <Feature>ServiceImpl.java        # Service implementation (@Service)
@@ -57,13 +57,19 @@ docintelligence-catalog-service/
 
 **Key structural concepts:**
 
-- **Feature slice**: A self-contained top-level package for one feature (`mastervenue`, `ping`) that
+- **Feature slice**: A self-contained top-level package for one feature (`mastervenue`, `venuedeck`, `ping`) that
   holds its REST resources, service contract + implementation, DTOs and slice exceptions. Add a
   feature by adding a sibling package — never introduce `domain`/`application`/`adapter` layers.
 - **Infrastructure**: Cross-cutting technical concerns (config, security, messaging, persistence)
   with no business logic.
 - **Shared kernel**: Common exceptions and utilities reused across slices; must not depend on any
   slice or on `infrastructure`.
+- **Authorities & tenant scoping**: tenant callers carry `TENANT_OWNER` or `MEMBER`; platform
+  administrators carry `PLATFORM_ADMIN`. Tenant resources guard with `@PreAuthorize` — `hasAuthority('MEMBER')`
+  where only members may act, or `hasAnyAuthority('TENANT_OWNER', 'MEMBER')` where tenant owners may
+  also act (e.g. `venuedeck`). Tenant context is resolved from the `X-Tenant-ID` header or the JWT
+  `tenant_id` claim for `/api/v1/catalog/**`; `/api/v1/catalog/admin/**` is skipped by
+  `TenantExtractionFilter` and each request is scoped from the `{tenantKey}` path variable.
 - **Domain model & persistence**: Owned by the shared artifact `com.iqkv:docintelligence-venue`
   (models + XML mappers), consumed here via `@MapperScan` and `classpath*:mappers/**/*.xml`. This
   service carries no `domain`, `application` or `adapter` packages.
@@ -296,7 +302,9 @@ Before making recommendations, agents should understand the project's technology
 - `mybatis.configuration.map-underscore-to-camel-case=true` is enabled globally
 - Mapper interfaces annotated with `@Mapper` or discovered via `@MapperScan`; XML mappers ship in their owning artifact and are picked up through `classpath*:mappers/**/*.xml` (the master-venue models and mappers come from `com.iqkv:docintelligence-venue`)
 - Liquibase for schema migrations (`db/changelog/system/db.changelog-system.xml`)
-- **ShedLock** (`shedlock-spring` + `shedlock-provider-jdbc-template`) for distributed scheduled job locking
+- **Background jobs** — this service defines no `@Scheduled` tasks and no ShedLock locking; recurring
+  work (e.g. venue embedding backfill) runs in `docintelligence-catalog-processing-worker`. A `shedlock`
+  table migration still ships under `db/changelog/system/`.
 
 **Security**
 
