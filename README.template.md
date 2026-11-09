@@ -7,6 +7,7 @@ A multi-tenant, JWT-secured microservice on the iQ Key Value platform, backed by
 The Catalog Service provides:
 
 - **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
+- **Venue deck uploads** — two-phase presigned MinIO upload for tenant venue deck PDFs (initiate → direct upload → confirm), with an upload lifecycle status of `UPLOADED` → `PARSING` → `EXTRACTED` / `FAILED`
 - **Ollama connectivity** — LLM client pre-wired to a local Ollama instance via `spring.ai.ollama.*` (base URL and model configurable per environment)
 - **Multi-tenant isolation** — tenant context resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim before every request
 - **Persistence** — data stored in PostgreSQL via MyBatis; Liquibase manages system and per-tenant schema migrations
@@ -44,6 +45,28 @@ Read-only tenant surface. Responses use the public projection — `confidence`, 
 | `GET`  | `/master-venues/{id}/assets` | JWT `MEMBER` | List all assets of a venue, ordered by `displayOrder`, without ingestion provenance    |
 | `GET`  | `/master-venues/{id}/photos` | JWT `MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                    |
 
+### Venues
+
+Read-only access to the tenant's own venue records. Requires the `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. Responses use the safe projection — `metadata`, `confidence` and `source` are not exposed; the optional `masterVenueId` relation key is kept.
+
+| Method | Path           | Auth         | Description                                                                            |
+| :----- | :------------- | :----------- | :------------------------------------------------------------------------------------- |
+| `GET`  | `/venues`       | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
+| `GET`  | `/venues/{id}` | JWT `MEMBER` | Fetch a single tenant venue by UUID                                                    |
+
+### Venue decks
+
+Two-phase presigned upload for tenant venue deck PDFs, plus list and detail reads. Requires the `MEMBER` authority; tenant rows are isolated by tenant schema.
+
+| Method   | Path                        | Auth         | Description                                                                                                    |
+| :------- | :-------------------------- | :----------- | :------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/venue-decks/initiate`     | JWT `MEMBER` | Validate the declared file (`fileName`, `contentType`, `sizeBytes`) and return a presigned `PUT` URL + `documentId` + `objectKey` |
+| `POST`   | `/venue-decks/{id}/confirm` | JWT `MEMBER` | Validate the object key and the uploaded object (`statObject`), persist file metadata with status `UPLOADED` |
+| `GET`    | `/venue-decks`              | JWT `MEMBER` | List venue decks of the active tenant, ordered by most recently created, paginated via `limit` / `offset`    |
+| `GET`    | `/venue-decks/{id}`         | JWT `MEMBER` | Fetch a single venue deck by UUID                                                                              |
+
+The client uploads directly to MinIO using the presigned `PUT` URL returned by `initiate`, then calls `confirm` with the `objectKey` and `fileName`. The object key is tenant-scoped (`docintelligence/tenant/{tenantKey}/venue-decks/{documentId}`), so confirm validates ownership by exact match. A document carries the upload lifecycle status `UPLOADED`, later transitioning to `PARSING` → `EXTRACTED`, or `FAILED`. `initiate` and `confirm` answer `400` for an unsupported content type, an oversized file, an object key mismatch, or a missing storage object; `{id}` paths answer `404` when the deck does not exist.
+
 ### Admin
 
 Full CRUD over the master venue catalog, using the admin projection (all curation fields included). Admin asset reads also expose ingestion provenance such as `sourceUrl` and `provider`.
@@ -61,6 +84,22 @@ Full CRUD over the master venue catalog, using the admin projection (all curatio
 | `DELETE` | `/admin/master-venues`             | JWT `PLATFORM_ADMIN` | Bulk delete master venues; idempotent, returns `204`                     |
 
 `DELETE /admin/master-venues` takes a JSON body of `{"ids": [uuid, ...]}` (1–100 ids) and removes every matching venue in one transaction. Deleting a venue removes its aliases and external provider records through the database cascade; ids that match no venue are silently ignored, so the request can be retried safely. Empty or oversized id lists are rejected with `400`.
+
+### Venues (admin)
+
+Full CRUD over tenant venue records. Requires the `PLATFORM_ADMIN` authority; each request is scoped to the tenant in the `{tenantKey}` path variable (`/api/v1/catalog/admin/{tenantKey}/venues`).
+
+| Method   | Path                                   | Auth                 | Description                                                              |
+| :------- | :------------------------------------- | :------------------- | :----------------------------------------------------------------------- |
+| `GET`    | `/admin/{tenantKey}/venues`            | JWT `PLATFORM_ADMIN` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` / `offset` |
+| `GET`    | `/admin/{tenantKey}/venues/search/semantic` | JWT `PLATFORM_ADMIN` | Semantic (vector) search over tenant venues — AI query planner + cosine similarity |
+| `GET`    | `/admin/{tenantKey}/venues/{id}`       | JWT `PLATFORM_ADMIN` | Fetch a single tenant venue by UUID                                      |
+| `POST`   | `/admin/{tenantKey}/venues`            | JWT `PLATFORM_ADMIN` | Create a tenant venue; returns `201`                                     |
+| `PUT`    | `/admin/{tenantKey}/venues/{id}`       | JWT `PLATFORM_ADMIN` | Replace a tenant venue in full                                            |
+| `PATCH`  | `/admin/{tenantKey}/venues/{id}`       | JWT `PLATFORM_ADMIN` | Partially update a tenant venue; omitted fields keep their current value |
+| `DELETE` | `/admin/{tenantKey}/venues/{id}`      | JWT `PLATFORM_ADMIN` | Delete a tenant venue; returns `204`                                     |
+
+A venue carries an optional `masterVenueId` relation key to a master catalog record. `POST` and `PUT` take a write payload (`name`, `address`, `city`, `locationLat`, `locationLng`, `metadata`, `confidence`, `source`, `masterVenueId`); `PATCH` takes the same shape with every field optional. Omitted `metadata` defaults to the canonical empty document and omitted `confidence` to `1.0`. `{id}` paths answer `404` when the venue does not exist in that tenant schema. `GET .../search/semantic` runs an AI query planner that extracts hard filters (city, venue type, capacity, catering, amenities, accessibility) and ranks the embedded venues by cosine similarity using the per-tenant pgvector index; only venues already carrying an embedding are considered, and a disabled or unreachable planner falls back to embedding the raw query with no filters.
 
 > Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
 
@@ -197,6 +236,11 @@ src/main/java/com/iqkv/docintelligence/catalogservice/
 │   ├── MasterVenueRestResource.java
 │   ├── MasterVenueService.java
 │   └── MasterVenueServiceImpl.java
+├── venuedeck/        # Venue deck upload feature — two-phase presigned MinIO upload + list/detail
+│   ├── dto/          # Request/response records and the DTO mapper
+│   ├── VenueDeckRestResource.java
+│   ├── VenueDeckService.java
+│   └── VenueDeckServiceImpl.java
 ├── ping/             # Example feature module — reachability probes across the three security tiers
 ├── infrastructure/   # Technical concerns: Spring config, RabbitMQ, Security, MyBatis, Object storage
 ├── shared/           # Common exceptions, utilities, value objects
