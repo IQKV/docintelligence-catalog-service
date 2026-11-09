@@ -62,8 +62,8 @@ class MasterVenueSemanticSearchServiceTest {
   void shouldApplyPlanAsJsonbPredicates() {
     // Arrange
     final var plan = new MasterVenueQueryPlanner.QueryPlan(
-        "Kyiv", List.of("rooftop", "outdoor_garden"), 200, 500,
-        "outside_allowed", List.of("Terrace"), Boolean.TRUE, "rooftop party");
+        "Kyiv", List.of("Rooftop", "Outdoor garden or terrace"), 200, 500,
+        "External catering only", List.of("Terrace"), Boolean.TRUE, "rooftop party");
     when(queryPlanner.plan("rooftop party in Kyiv for 200 guests")).thenReturn(plan);
     when(embeddingModel.embed("rooftop party")).thenReturn(new float[] {0.1f, 0.2f});
 
@@ -82,18 +82,18 @@ class MasterVenueSemanticSearchServiceTest {
 
     assertThat(searchSql)
         .contains("LOWER(city) = LOWER(?)")
-        .contains("jsonb_exists_any(metadata->'venue_type', ARRAY[?, ?]::text[])")
+        .contains("metadata->'items' @> jsonb_build_array(jsonb_build_object('group', 'venue_type', 'field', 'venue_type', 'value', ?))")
         .contains(">= ?")
         .contains("<= ?")
-        .contains("metadata->'catering'->>'policy' = ?")
-        .contains("jsonb_exists_any(metadata->'amenities', ARRAY[?]::text[])")
-        .contains("metadata->'accessibility'->>'ada_compliant' = 'true'")
+        .contains("metadata->'items' @> jsonb_build_array(jsonb_build_object('group', 'catering', 'field', 'policy', 'value', ?))")
+        .contains("metadata->'items' @> jsonb_build_array(jsonb_build_object('group', 'amenities', 'field', 'amenities', 'value', ?))")
+        .contains("'[{\"group\":\"accessibility\",\"field\":\"ada_compliant\",\"value\":true}]'::jsonb")
         .contains("ORDER BY embedding <=> ?::vector");
-    assertThat(countSql).contains("jsonb_exists_any(metadata->'venue_type'");
+    assertThat(countSql).contains("jsonb_build_object('group', 'venue_type'");
 
     assertThat(response.appliedFilters()).isEqualTo(new MasterVenueDtos.SemanticSearchFilters(
-        "Kyiv", List.of("rooftop", "outdoor_garden"), 200, 500,
-        "outside_allowed", List.of("Terrace"), Boolean.TRUE));
+        "Kyiv", List.of("Rooftop", "Outdoor garden or terrace"), 200, 500,
+        "External catering only", List.of("Terrace"), Boolean.TRUE));
     assertThat(response.totalElements()).isZero();
   }
 
@@ -117,7 +117,7 @@ class MasterVenueSemanticSearchServiceTest {
     verify(jdbcTemplate, times(2)).query(sqlCaptor.capture(), any(PreparedStatementSetter.class),
         ArgumentMatchers.<RowMapper<Object>>any());
     assertThat(sqlCaptor.getAllValues().get(0))
-        .doesNotContain("jsonb_exists_any")
+        .doesNotContain("metadata->'items'")
         .doesNotContain("LOWER(city)");
   }
 }

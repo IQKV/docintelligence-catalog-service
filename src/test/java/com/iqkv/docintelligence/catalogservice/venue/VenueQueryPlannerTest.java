@@ -51,9 +51,10 @@ class VenueQueryPlannerTest {
   @DisplayName("sanitize drops unknown venue types, clamps non-positive capacities and trims amenities")
   void sanitizeDropsUnknownAndClamps() {
     // Arrange — "ufo" is not a canonical venue type, -5 capacity is non-positive, amenities
-    // carry a blank entry that must be dropped and a padded entry that must be trimmed.
+    // carry a blank entry that must be dropped and a padded entry that must be trimmed. The
+    // lowercase type and shouting catering policy must come back in their canonical casing.
     final var raw = new VenueQueryPlanner.QueryPlan(
-        "Paris", List.of("hotel_ballroom", "ufo"), -5, 1000, "outside_allowed",
+        "Paris", List.of("restaurant", "ufo"), -5, 1000, "IN-HOUSE CATERING ONLY",
         List.of("  wifi  ", ""), false, "loft rooftop");
 
     // Act
@@ -61,12 +62,23 @@ class VenueQueryPlannerTest {
 
     // Assert
     assertThat(sanitized.city()).isEqualTo("Paris");
-    assertThat(sanitized.venueTypes()).containsExactly("hotel_ballroom");
+    assertThat(sanitized.venueTypes()).containsExactly("Restaurant");
     assertThat(sanitized.minCapacity()).isNull();
     assertThat(sanitized.maxCapacity()).isEqualTo(1000);
     assertThat(sanitized.amenities()).containsExactly("wifi");
-    assertThat(sanitized.cateringPolicy()).isEqualTo("outside_allowed");
+    assertThat(sanitized.cateringPolicy()).isEqualTo("In-house catering only");
     assertThat(sanitized.semanticQuery()).isEqualTo("loft rooftop");
+  }
+
+  @Test
+  @DisplayName("sanitize matches a multi-word venue type regardless of casing")
+  void sanitizeMatchesMultiWordVenueType() {
+    final var raw = new VenueQueryPlanner.QueryPlan(
+        null, List.of("bar or lounge"), null, null, null, List.of(), null, "bar");
+
+    final var sanitized = VenueQueryPlanner.sanitize(raw, "bar");
+
+    assertThat(sanitized.venueTypes()).containsExactly("Bar or lounge");
   }
 
   @Test

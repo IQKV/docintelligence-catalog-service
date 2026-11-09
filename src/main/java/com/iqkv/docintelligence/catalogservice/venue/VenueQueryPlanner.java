@@ -17,8 +17,10 @@
 package com.iqkv.docintelligence.catalogservice.venue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenueAiSearchProperties;
 import org.slf4j.Logger;
@@ -56,18 +58,29 @@ class VenueQueryPlanner {
   private static final int MAX_AMENITIES = 8;
 
   /**
-   * Canonical venue-type values; mirrors the metadata vocabulary written by the ingest worker.
+   * Canonical venue-type values; mirrors the plain-English vocabulary written by the ingest
+   * worker ({@code metadata.items} rows with {@code group=venue_type}).
    */
-  private static final Set<String> VENUE_TYPES = Set.of(
-      "hotel_ballroom", "conference_center", "restaurant", "rooftop", "outdoor_garden",
-      "historic_building", "warehouse_loft", "theatre_auditorium", "gallery",
-      "sports_facility", "boat_cruise", "private_estate", "other");
+  private static final List<String> VENUE_TYPES = List.of(
+      "Restaurant", "Hotel", "Bar or lounge", "Rooftop", "Gallery",
+      "Warehouse or industrial space", "Studio", "Outdoor garden or terrace",
+      "Town hall or community centre", "Conference centre", "Stadium or arena", "Museum",
+      "Theatre or cinema", "Boat or yacht", "Marquee, tipi or barn", "Park, zoo or gardens",
+      "Place of worship", "Private members club", "Nightclub", "Historic house or estate",
+      "Beach or coastal venue", "Unclassified");
 
-  /**
-   * Canonical catering policies; anything else the model returns is discarded.
-   */
-  private static final Set<String> CATERING_POLICIES = Set.of(
-      "in_house_exclusive", "in_house_preferred", "outside_allowed", "no_catering");
+  /** Lowercase-to-canonical lookup so model output is matched regardless of casing. */
+  private static final Map<String, String> VENUE_TYPE_BY_LOWER = VENUE_TYPES.stream()
+      .collect(Collectors.toUnmodifiableMap(String::toLowerCase, Function.identity()));
+
+  /** Canonical catering policies; anything else the model returns is discarded. */
+  private static final List<String> CATERING_POLICIES = List.of(
+      "In-house catering only", "External catering only",
+      "In-house and external catering both allowed", "Catering not specified");
+
+  /** Lowercase-to-canonical lookup so model output is matched regardless of casing. */
+  private static final Map<String, String> CATERING_POLICY_BY_LOWER = CATERING_POLICIES.stream()
+      .collect(Collectors.toUnmodifiableMap(String::toLowerCase, Function.identity()));
 
   private static final String SYSTEM_PROMPT = """
       You convert a natural-language venue search query into structured filters.
@@ -75,14 +88,19 @@ class VenueQueryPlanner {
 
       Rules:
       - city: the city name when the query names one, else null.
-      - venueTypes: zero or more of [hotel_ballroom, conference_center, restaurant, rooftop,
-        outdoor_garden, historic_building, warehouse_loft, theatre_auditorium, gallery,
-        sports_facility, boat_cruise, private_estate, other]. Empty when unspecified.
+      - venueTypes: zero or more of [Restaurant, Hotel, Bar or lounge, Rooftop, Gallery,
+        Warehouse or industrial space, Studio, Outdoor garden or terrace,
+        Town hall or community centre, Conference centre, Stadium or arena, Museum,
+        Theatre or cinema, Boat or yacht, Marquee, tipi or barn, Park, zoo or gardens,
+        Place of worship, Private members club, Nightclub, Historic house or estate,
+        Beach or coastal venue, Unclassified]. Empty when unspecified. Copy the value exactly,
+        including its capitalisation.
       - minCapacity: the smallest maximum capacity a venue must have to host the described event,
         as an integer, else null.
       - maxCapacity: the largest capacity the venue should have, as an integer, else null.
-      - cateringPolicy: one of [in_house_exclusive, in_house_preferred, outside_allowed,
-        no_catering] when the query implies a catering requirement, else null.
+      - cateringPolicy: one of [In-house catering only, External catering only,
+        In-house and external catering both allowed, Catering not specified] when the query
+        implies a catering requirement, else null.
       - amenities: short amenity keywords the venue must offer, else an empty list.
       - accessible: true only when the query requires wheelchair access, else null.
       - semanticQuery: the part of the query describing the venue's vibe, style or purpose with the
@@ -145,8 +163,9 @@ class VenueQueryPlanner {
     }
     final List<String> venueTypes = raw.venueTypes() == null ? List.of()
         : raw.venueTypes().stream()
-            .map(VenueQueryPlanner::lower)
-            .filter(VENUE_TYPES::contains)
+            .map(VenueQueryPlanner::trimToNull)
+            .map(VenueQueryPlanner::canonicalVenueType)
+            .filter(Objects::nonNull)
             .distinct()
             .toList();
     final List<String> amenities = raw.amenities() == null ? List.of()
@@ -155,7 +174,7 @@ class VenueQueryPlanner {
             .filter(Objects::nonNull)
             .limit(MAX_AMENITIES)
             .toList();
-    final String catering = lower(raw.cateringPolicy());
+    final String catering = canonicalCateringPolicy(raw.cateringPolicy());
     final String semantic = raw.semanticQuery() == null || raw.semanticQuery().isBlank()
         ? query : raw.semanticQuery().strip();
     return new QueryPlan(
@@ -163,15 +182,19 @@ class VenueQueryPlanner {
         venueTypes,
         positive(raw.minCapacity()),
         positive(raw.maxCapacity()),
-        catering != null && CATERING_POLICIES.contains(catering) ? catering : null,
+        catering,
         amenities,
         raw.accessible(),
         truncate(semantic, MAX_QUERY_CHARS));
   }
 
-  private static String lower(final String value) {
+  private static String canonicalVenueType(final String value) {
+    return value == null ? null : VENUE_TYPE_BY_LOWER.get(value.toLowerCase());
+  }
+
+  private static String canonicalCateringPolicy(final String value) {
     final String trimmed = trimToNull(value);
-    return trimmed == null ? null : trimmed.toLowerCase();
+    return trimmed == null ? null : CATERING_POLICY_BY_LOWER.get(trimmed.toLowerCase());
   }
 
   private static String trimToNull(final String value) {

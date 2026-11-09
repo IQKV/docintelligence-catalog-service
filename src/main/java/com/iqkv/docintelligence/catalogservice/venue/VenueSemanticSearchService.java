@@ -21,7 +21,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,13 +75,18 @@ class VenueSemanticSearchService {
   private static final String SEARCH_ORDER = "\nORDER BY embedding <=> ?::vector\nLIMIT ?";
 
   /**
-   * Guards the {@code max_total} cast: metadata is free-form JSONB, so a non-numeric value would
-   * otherwise abort the whole query. The {@code CASE} yields SQL {@code NULL} for anything that is
-   * not a positive number, which the {@code >=} comparison then treats as "no match".
+   * Extracts {@code capacity.max_total} from the flat metadata item list as a number. The item
+   * list stores {@code value} with its native JSON type, so the text guard yields SQL {@code NULL}
+   * for anything that is not a positive number; the {@code >=} comparison then treats it as
+   * "no match" instead of aborting the whole query on a malformed value. The key is absent on rows
+   * whose metadata is the bare {@code {"_schema_version":1}} default, which leaves the subquery
+   * {@code NULL} and excludes them.
    */
   private static final String CAPACITY_NUMERIC =
-      "CASE WHEN metadata->'capacity'->>'max_total' ~ '^[0-9]+(\\.[0-9]+)?$' "
-          + "THEN (metadata->'capacity'->>'max_total')::numeric END";
+      "(SELECT CASE WHEN item->>'value' ~ '^[0-9]+(\\.[0-9]+)?$' "
+          + "THEN (item->>'value')::numeric END "
+          + "FROM jsonb_array_elements(metadata->'items') AS item "
+          + "WHERE item->>'group' = 'capacity' AND item->>'field' = 'max_total' LIMIT 1)";
 
   private final JdbcTemplate jdbcTemplate;
 
@@ -197,48 +201,55 @@ class VenueSemanticSearchService {
       sql.append("\n  AND LOWER(city) = LOWER(?)");
       binders.add((ps, index) -> ps.setObject(index, city, Types.VARCHAR));
     }
-    addArrayFilter(sql, binders, "metadata->'venue_type'", venueTypes);
+    addItemFilter(sql, binders, "venue_type", "venue_type", venueTypes);
     if (minCapacity != null) {
-      sql.append("\n  AND (").append(CAPACITY_NUMERIC).append(") >= ?");
+      sql.append("\n  AND ").append(CAPACITY_NUMERIC).append(" >= ?");
       binders.add((ps, index) -> ps.setObject(index, minCapacity, Types.NUMERIC));
     }
     if (maxCapacity != null) {
-      sql.append("\n  AND (").append(CAPACITY_NUMERIC).append(") <= ?");
+      sql.append("\n  AND ").append(CAPACITY_NUMERIC).append(" <= ?");
       binders.add((ps, index) -> ps.setObject(index, maxCapacity, Types.NUMERIC));
     }
     if (cateringPolicy != null) {
-      sql.append("\n  AND metadata->'catering'->>'policy' = ?");
-      binders.add((ps, index) -> ps.setObject(index, cateringPolicy, Types.VARCHAR));
+      addItemFilter(sql, binders, "catering", "policy", List.of(cateringPolicy));
     }
-    addArrayFilter(sql, binders, "metadata->'amenities'", amenities);
+    addItemFilter(sql, binders, "amenities", "amenities", amenities);
     if (Boolean.TRUE.equals(accessible)) {
-      // Compared as text so no cast is attempted on malformed metadata.
-      sql.append("\n  AND metadata->'accessibility'->>'ada_compliant' = 'true'");
+      // The flag is stored as a native JSON boolean, so it is matched as one.
+      sql.append("\n  AND metadata->'items' @> ")
+          .append("'[{\"group\":\"accessibility\",\"field\":\"ada_compliant\",\"value\":true}]'::jsonb");
     }
     return new Filter(sql.toString(), List.copyOf(binders));
   }
 
   /**
-   * Adds an "array contains any of" predicate via {@code jsonb_exists_any}. The function form is
-   * used instead of the {@code ?|} operator because the bare {@code ?} is consumed by the JDBC
-   * driver as a bind placeholder.
+   * Adds an "any of these items" predicate over the flat metadata list. Each candidate value
+   * becomes {@code metadata->'items' @> [{"group": g, "field": f, "value": v}]}; containment is
+   * used so the {@code jsonb_ops} GIN index on {@code metadata->'items'} can back the filter. The
+   * array is built in SQL via {@code jsonb_build_object} rather than by interpolating the value,
+   * so a value containing quotes stays safe.
    */
-  private static void addArrayFilter(final StringBuilder sql,
-                                     final List<Binder> binders,
-                                     final String jsonPath,
-                                     final List<String> values) {
+  private static void addItemFilter(final StringBuilder sql,
+                                    final List<Binder> binders,
+                                    final String group,
+                                    final String field,
+                                    final List<String> values) {
     if (values == null || values.isEmpty()) {
       return;
     }
-    sql.append("\n  AND jsonb_exists_any(").append(jsonPath)
-        .append(", ARRAY[").append(joinPlaceholders(values.size())).append("]::text[])");
-    for (final String value : values) {
+    sql.append("\n  AND (");
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        sql.append(" OR ");
+      }
+      sql.append("metadata->'items' @> jsonb_build_array(jsonb_build_object(")
+          .append("'group', '").append(group)
+          .append("', 'field', '").append(field)
+          .append("', 'value', ?))");
+      final String value = values.get(i);
       binders.add((ps, index) -> ps.setObject(index, value, Types.VARCHAR));
     }
-  }
-
-  private static String joinPlaceholders(final int count) {
-    return String.join(", ", Collections.nCopies(count, "?"));
+    sql.append(")");
   }
 
   private static void bindAll(final PreparedStatement ps, final List<Binder> binders) throws SQLException {

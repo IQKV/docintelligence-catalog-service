@@ -15,5 +15,6 @@
     <include file="db/changelog/system/20261029120000-add-master-venue-primary-photo-url.xml"/>
     <include file="db/changelog/system/20261030120000-add-master-venue-embedding.xml"/>
     <include file="db/changelog/system/20261104120000-add-master-venue-metadata-gin.xml"/>
+    <include file="db/changelog/system/20261109120000-add-master-venue-metadata-items-gin.xml"/>
 
 </databaseChangeLog>

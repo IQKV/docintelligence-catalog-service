@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- The AI query planner filters the flat metadata item list, so the GIN index must cover
+         metadata->'items' (the array of {group, field, value} rows the ingest worker writes).
+         The 20261104120000 indexes targeted metadata->'venue_type' / metadata->'amenities', which
+         never exist on the stored document, so no predicate could use them. jsonb_ops is required
+         — jsonb_path_ops does not support the containment / ? operators. -->
+    <changeSet id="20261109120000-add-master-venue-metadata-items-gin" author="iqkv">
+
+        <sql>DROP INDEX IF EXISTS public.idx_master_venue_metadata_venue_type_gin</sql>
+
+        <sql>DROP INDEX IF EXISTS public.idx_master_venue_metadata_amenities_gin</sql>
+
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_master_venue_metadata_items_gin
+            ON public.master_venue
+            USING gin ((metadata->'items') jsonb_ops)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS public.idx_master_venue_metadata_items_gin</sql>
+            <sql>
+                CREATE INDEX IF NOT EXISTS idx_master_venue_metadata_venue_type_gin
+                ON public.master_venue
+                USING gin ((metadata->'venue_type') jsonb_ops)
+            </sql>
+            <sql>
+                CREATE INDEX IF NOT EXISTS idx_master_venue_metadata_amenities_gin
+                ON public.master_venue
+                USING gin ((metadata->'amenities') jsonb_ops)
+            </sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

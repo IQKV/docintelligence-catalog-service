@@ -114,17 +114,17 @@ class MasterVenueQueryPlannerTest {
     // Arrange
     stubModelReturning(new QueryPlan(
         " Kyiv ", List.of("Rooftop", "not_a_type"), 200, 500,
-        "OUTSIDE_ALLOWED", List.of("Terrace"), Boolean.TRUE, "rooftop party"));
+        "EXTERNAL CATERING ONLY", List.of("Terrace"), Boolean.TRUE, "rooftop party"));
 
     // Act
     final QueryPlan plan = planner.plan("some query");
 
     // Assert
     assertThat(plan.city()).isEqualTo("Kyiv");
-    assertThat(plan.venueTypes()).containsExactly("rooftop");
+    assertThat(plan.venueTypes()).containsExactly("Rooftop");
     assertThat(plan.minCapacity()).isEqualTo(200);
     assertThat(plan.maxCapacity()).isEqualTo(500);
-    assertThat(plan.cateringPolicy()).isEqualTo("outside_allowed");
+    assertThat(plan.cateringPolicy()).isEqualTo("External catering only");
     assertThat(plan.amenities()).containsExactly("Terrace");
     assertThat(plan.accessible()).isTrue();
     assertThat(plan.semanticQuery()).isEqualTo("rooftop party");
@@ -155,14 +155,14 @@ class MasterVenueQueryPlannerTest {
   void sanitizeShouldDropUnknownValues() {
     // Arrange
     final QueryPlan raw = new QueryPlan(
-        null, List.of("GALLERY", "spaceship", "gallery"), null, null,
+        null, List.of("gallery", "spaceship", "GALLERY"), null, null,
         "bring_your_own", List.of(), null, "gallery launch");
 
     // Act
     final QueryPlan plan = MasterVenueQueryPlanner.sanitize(raw, "gallery launch");
 
     // Assert
-    assertThat(plan.venueTypes()).containsExactly("gallery");
+    assertThat(plan.venueTypes()).containsExactly("Gallery");
     assertThat(plan.cateringPolicy()).isNull();
     assertThat(plan.city()).isNull();
   }
