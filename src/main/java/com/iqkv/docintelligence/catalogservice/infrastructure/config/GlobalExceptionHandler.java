@@ -21,6 +21,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.shared.exception.InvalidUploadRequestException;
 import com.iqkv.docintelligence.catalogservice.shared.exception.ResourceNotFoundException;
 import com.iqkv.foundation.entitlement.plan.BillingServiceException;
 import com.iqkv.foundation.entitlement.plan.PlanFeatureNotAvailableException;
@@ -161,6 +162,15 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ProblemDetail> handleTypeMismatch(final MethodArgumentTypeMismatchException ex,
                                                           final HttpServletRequest request) {
     log.warn("Type mismatch: {}", ex.getMessage());
+    final ProblemDetail pd = problem("about:blank", "Bad Request", 400,
+        ex.getMessage(), request);
+    return ResponseEntity.badRequest().body(pd);
+  }
+
+  @ExceptionHandler(InvalidUploadRequestException.class)
+  public ResponseEntity<ProblemDetail> handleInvalidUploadRequest(final InvalidUploadRequestException ex,
+                                                                  final HttpServletRequest request) {
+    log.warn("Invalid upload request: {}", ex.getMessage());
     final ProblemDetail pd = problem("about:blank", "Bad Request", 400,
         ex.getMessage(), request);
     return ResponseEntity.badRequest().body(pd);

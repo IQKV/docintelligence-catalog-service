@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Tenant venue profile — the tenant-owned counterpart of public.master_venue.
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner
+         before these changesets run, so no schemaName is set on the statements below).
+         Mirrors master_venue's columns and adds an optional master_venue_id relation key
+         to public.master_venue. That key is app-level only: a DB-level FK is not possible
+         across a tenant schema and public. NULL means the tenant venue is not linked to a
+         master record. -->
+
+    <changeSet id="20261109120000-create-venues" author="iqkv">
+
+        <createTable tableName="venues">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="address" type="TEXT"/>
+            <column name="city" type="VARCHAR(100)"/>
+            <column name="location_lat" type="NUMERIC(9,6)"/>
+            <column name="location_lng" type="NUMERIC(9,6)"/>
+            <!-- Canonical metadata document; _schema_version is mandatory. -->
+            <column name="metadata" type="JSONB" defaultValue="{&quot;_schema_version&quot;:1}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="confidence" type="NUMERIC(3,2)"/>
+            <!-- How the record was created: MANUAL, FILE_IMPORT. -->
+            <column name="source" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Optional relation key to public.master_venue. App-level only — no DB FK
+                 constraint, because cross-schema FKs are not supported across tenant
+                 schemas and public. NULL when the tenant venue is not linked to a master. -->
+            <column name="master_venue_id" type="UUID"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="venues" indexName="idx_venues_city">
+            <column name="city"/>
+        </createIndex>
+        <createIndex tableName="venues" indexName="idx_venues_master_venue_id">
+            <column name="master_venue_id"/>
+        </createIndex>
+        <sql>CREATE INDEX idx_venues_name_lower ON venues (LOWER(name));</sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_venues_name_lower;</sql>
+            <dropIndex tableName="venues" indexName="idx_venues_master_venue_id"/>
+            <dropIndex tableName="venues" indexName="idx_venues_city"/>
+            <dropTable tableName="venues"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

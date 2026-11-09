@@ -9,4 +9,7 @@
          TenantLiquibaseRunner sets the search_path to t_{tenantKey} before running these.
          Add <include> entries below in timestamp order. -->
 
+    <include file="db/changelog/tenant/20261109120000-create-venues.xml"/>
+    <include file="db/changelog/tenant/20261109120001-create-venue-documents.xml"/>
+
 </databaseChangeLog>
