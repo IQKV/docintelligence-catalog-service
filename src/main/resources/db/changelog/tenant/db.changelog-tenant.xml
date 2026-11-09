@@ -12,5 +12,6 @@
     <include file="db/changelog/tenant/20261109120000-create-venues.xml"/>
     <include file="db/changelog/tenant/20261109120001-create-venue-documents.xml"/>
     <include file="db/changelog/tenant/20261109130000-add-venue-embedding.xml"/>
+    <include file="db/changelog/tenant/20261109140000-add-venue-metadata-items-gin.xml"/>
 
 </databaseChangeLog>

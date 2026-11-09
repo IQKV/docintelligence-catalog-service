@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Tenant counterpart of idx_master_venue_metadata_items_gin. The tenant semantic search
+         filters the same flat metadata item list with the same containment predicates
+         (metadata->'items' @> [{group, field, value}]), so it needs the same jsonb_ops GIN
+         index to avoid a sequential scan. jsonb_ops is required — jsonb_path_ops does not
+         support the containment / ? operators.
+
+         Unqualified 'venues' resolves to the active t_{tenantKey} schema because
+         TenantLiquibaseRunner sets search_path before running these changesets. -->
+
+    <changeSet id="20261109140000-add-venue-metadata-items-gin" author="iqkv">
+
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_venues_metadata_items_gin
+            ON venues
+            USING gin ((metadata->'items') jsonb_ops)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_venues_metadata_items_gin</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>
