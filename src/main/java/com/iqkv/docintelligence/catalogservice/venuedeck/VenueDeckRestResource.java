@@ -55,7 +55,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/catalog/venue-decks")
 @Tag(name = "Venue Decks", description = "Tenant upload and management of venue deck PDFs")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAuthority('MEMBER')")
+@PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'MEMBER')")
 public class VenueDeckRestResource {
 
   private final VenueDeckService venueDeckService;
@@ -78,7 +78,7 @@ public class VenueDeckRestResource {
                    content = @Content(schema = @Schema(implementation = VenueDeckDtos.InitiateUploadResponse.class))),
       @ApiResponse(responseCode = "400", description = "Unsupported content type or file too large", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content)
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content)
   })
   public ResponseEntity<VenueDeckDtos.InitiateUploadResponse> initiateUpload(
       @AuthenticationPrincipal final Jwt jwt,
@@ -103,7 +103,7 @@ public class VenueDeckRestResource {
                    content = @Content(schema = @Schema(implementation = VenueDeckDtos.VenueDocumentResponse.class))),
       @ApiResponse(responseCode = "400", description = "Object key mismatch or object not found in storage", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content)
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content)
   })
   public ResponseEntity<VenueDeckDtos.VenueDocumentResponse> confirmUpload(
       @AuthenticationPrincipal final Jwt jwt,
@@ -126,7 +126,7 @@ public class VenueDeckRestResource {
       @ApiResponse(responseCode = "200", description = "Venue decks of the active tenant",
                    content = @Content(schema = @Schema(implementation = VenueDeckDtos.VenueDocumentListResponse.class))),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content)
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content)
   })
   public ResponseEntity<VenueDeckDtos.VenueDocumentListResponse> list(
       @Parameter(description = "Maximum number of documents to return")
@@ -148,7 +148,7 @@ public class VenueDeckRestResource {
       @ApiResponse(responseCode = "200", description = "Venue deck found",
                    content = @Content(schema = @Schema(implementation = VenueDeckDtos.VenueDocumentResponse.class))),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content),
       @ApiResponse(responseCode = "404", description = "Venue deck not found", content = @Content)
   })
   public ResponseEntity<VenueDeckDtos.VenueDocumentResponse> getById(

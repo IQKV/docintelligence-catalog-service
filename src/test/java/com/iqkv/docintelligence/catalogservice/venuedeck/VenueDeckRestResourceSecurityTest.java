@@ -39,9 +39,9 @@ import org.springframework.web.context.WebApplicationContext;
  *
  * <p>MockMvc is built from the web application context directly so the full security chain —
  * {@code CorrelationIdFilter}, {@code TenantExtractionFilter} and the resource-server chain — runs
- * in the real order. Venue deck endpoints are member-tier and tenant-scoped: they are not under
- * {@code /admin/} so {@code TenantExtractionFilter} does not skip them, and the class-level
- * {@code @PreAuthorize("hasAuthority('MEMBER')")} guards every method.
+ * in the real order. Venue deck endpoints are tenant-scoped: they are not under {@code /admin/} so
+ * {@code TenantExtractionFilter} does not skip them, and the class-level
+ * {@code @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'MEMBER')")} guards every method.
  */
 @SpringBootTest(classes = {CatalogServiceApplication.class})
 @ActiveProfiles("test")
@@ -108,17 +108,17 @@ class VenueDeckRestResourceSecurityTest {
   }
 
   @Test
-  @DisplayName("List rejects an authenticated caller without MEMBER authority")
+  @DisplayName("List rejects an authenticated caller without TENANT_OWNER or MEMBER authority")
   @WithMockUser(authorities = "PLATFORM_ADMIN")
-  void listRejectsMissingMemberAuthority() throws Exception {
+  void listRejectsMissingTenantAuthority() throws Exception {
     mockMvc.perform(get(BASE_PATH).header(TENANT_HEADER, TENANT_KEY))
         .andExpect(status().isForbidden());
   }
 
   @Test
-  @DisplayName("Initiate rejects an authenticated caller without MEMBER authority")
+  @DisplayName("Initiate rejects an authenticated caller without TENANT_OWNER or MEMBER authority")
   @WithMockUser(authorities = "PLATFORM_ADMIN")
-  void initiateRejectsMissingMemberAuthority() throws Exception {
+  void initiateRejectsMissingTenantAuthority() throws Exception {
     mockMvc.perform(post(BASE_PATH + "/initiate")
             .header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON)
