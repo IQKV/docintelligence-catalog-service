@@ -80,7 +80,7 @@ class VenueDeckServiceImplTest {
 
   @Test
   @DisplayName("initiate rejects an unsupported content type")
-  void initiateRejectsUnsupportedContentType() {
+  void initiateRejectsUnsupportedContentType() throws Exception {
     final var request = new VenueDeckDtos.InitiateUploadRequest("deck.txt", "text/plain", 1024L);
 
     assertThatThrownBy(() -> service.initiateUpload(request, UUID.randomUUID()))
@@ -92,7 +92,7 @@ class VenueDeckServiceImplTest {
 
   @Test
   @DisplayName("initiate rejects a file over the configured maximum size")
-  void initiateRejectsOversize() {
+  void initiateRejectsOversize() throws Exception {
     final var request = new VenueDeckDtos.InitiateUploadRequest("deck.pdf", ALLOWED_TYPE, MAX_SIZE + 1);
 
     assertThatThrownBy(() -> service.initiateUpload(request, UUID.randomUUID()))
@@ -121,7 +121,7 @@ class VenueDeckServiceImplTest {
 
   @Test
   @DisplayName("confirm rejects an object key that does not match the document and tenant")
-  void confirmRejectsMismatchedObjectKey() {
+  void confirmRejectsMismatchedObjectKey() throws Exception {
     final UUID documentId = UUID.randomUUID();
     final var request = new VenueDeckDtos.ConfirmUploadRequest(
         "docintelligence/tenant/other/venue-decks/" + documentId, "deck.pdf");
@@ -221,7 +221,7 @@ class VenueDeckServiceImplTest {
     assertThat(response.items().get(0).fileName()).isEqualTo("deck.pdf");
   }
 
-  private void verifyNoStorageOrPersistence() {
+  private void verifyNoStorageOrPersistence() throws Exception {
     verify(minioClient, never()).statObject(any(StatObjectArgs.class));
     verify(presigningMinioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
     verify(documentMapper, never()).insert(any());
