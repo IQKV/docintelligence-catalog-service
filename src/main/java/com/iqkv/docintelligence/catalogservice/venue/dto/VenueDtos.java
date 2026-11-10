@@ -153,11 +153,12 @@ public final class VenueDtos {
   }
 
   /**
-   * Tenant-facing view of a single venue — the safe projection. Curation fields
-   * ({@code metadata}, {@code confidence}, {@code source}) are not exposed; the optional
-   * {@code masterVenueId} relation key is kept so a member can see whether the venue is linked
-   * to a master catalog entry, and the denormalised {@code primaryPhotoUrl} lets a caller render a
-   * thumbnail without loading the asset list.
+   * Tenant-facing view of a single venue — the safe projection. Hard curation signals
+   * ({@code confidence}, {@code source}) are not exposed; {@code metadata} is included so
+   * tenants can read and edit their own venue metadata document via the structured editor.
+   * The optional {@code masterVenueId} relation key is kept so a member can see whether the
+   * venue is linked to a master catalog entry, and the denormalised {@code primaryPhotoUrl}
+   * lets a caller render a thumbnail without loading the asset list.
    */
   public record VenuePublicResponse(
       UUID id,
@@ -167,6 +168,7 @@ public final class VenueDtos {
       BigDecimal locationLat,
       BigDecimal locationLng,
       String primaryPhotoUrl,
+      String metadata,
       UUID masterVenueId,
       Instant createdAt,
       Instant updatedAt) {

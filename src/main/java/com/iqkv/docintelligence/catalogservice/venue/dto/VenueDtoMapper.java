@@ -148,6 +148,7 @@ public final class VenueDtoMapper {
         venue.getLocationLat(),
         venue.getLocationLng(),
         venue.getPrimaryPhotoUrl(),
+        venue.getMetadata(),
         venue.getMasterVenueId(),
         venue.getCreatedAt(),
         venue.getUpdatedAt());
