@@ -62,17 +62,17 @@ Read-only tenant surface. Responses use the public projection — `confidence`, 
 
 ### Venues
 
-Full CRUD over the tenant's own venue records. Read endpoints require the `MEMBER` authority; write endpoints require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. Responses use the safe projection — `metadata`, `confidence` and `source` are not exposed; the optional `masterVenueId` relation key is kept.
+Full CRUD over the tenant's own venue records. Read endpoints require the `MEMBER`, `TENANT_OWNER`, or `ADMIN` authority; write endpoints require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. Responses use the safe projection — `metadata`, `confidence` and `source` are not exposed; the optional `masterVenueId` relation key is kept.
 
-| Method   | Path           | Auth                       | Description                                                                                                 |
-| :------- | :------------- | :------------------------- | :---------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/venues`      | JWT `MEMBER`               | Search by keyword (`search`) and exact city (`city`), with optional sort; paginated via `limit` / `offset`  |
-| `GET`    | `/venues/{id}` | JWT `MEMBER`               | Fetch a single tenant venue by UUID                                                                         |
-| `POST`   | `/venues`      | JWT `TENANT_OWNER`/`ADMIN` | Create a venue in the active tenant schema; curation fields initialised to safe defaults; returns `201`     |
-| `PUT`    | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN` | Full replace of tenant-visible fields; curation fields are not modified; returns `404` if not found         |
-| `PATCH`  | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN` | Partial update — only non-null fields are overwritten; curation fields are never modified                   |
-| `DELETE` | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN` | Permanently deletes the venue; returns `204`                                                                |
-| `DELETE` | `/venues`      | JWT `TENANT_OWNER`/`ADMIN` | Bulk delete up to 100 venues by id list; idempotent; returns `204`                                          |
+| Method   | Path           | Auth                                | Description                                                                                                 |
+| :------- | :------------- | :---------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/venues`      | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Search by keyword (`search`) and exact city (`city`), with optional sort; paginated via `limit` / `offset`  |
+| `GET`    | `/venues/{id}` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Fetch a single tenant venue by UUID                                                                         |
+| `POST`   | `/venues`      | JWT `TENANT_OWNER`/`ADMIN`          | Create a venue in the active tenant schema; curation fields initialised to safe defaults; returns `201`     |
+| `PUT`    | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN`          | Full replace of tenant-visible fields; curation fields are not modified; returns `404` if not found         |
+| `PATCH`  | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN`          | Partial update — only non-null fields are overwritten; curation fields are never modified                   |
+| `DELETE` | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN`          | Permanently deletes the venue; returns `204`                                                                |
+| `DELETE` | `/venues`      | JWT `TENANT_OWNER`/`ADMIN`          | Bulk delete up to 100 venues by id list; idempotent; returns `204`                                          |
 
 `DELETE /venues` takes a JSON body of `{"ids": [uuid, ...]}` (1–100 ids). Ids that match no venue are silently ignored; empty or oversized lists are rejected with `400`.
 

@@ -46,9 +46,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Tenant-facing venue surface — full CRUD over the tenant's own venue records.
  *
- * <p>Read endpoints ({@code GET}) require only the {@code MEMBER} authority. Write endpoints
- * ({@code POST}, {@code PUT}, {@code PATCH}, {@code DELETE}) require {@code TENANT_OWNER} or
- * {@code ADMIN} so that ordinary members remain read-only.
+ * <p>Read endpoints ({@code GET}) require {@code MEMBER}, {@code TENANT_OWNER}, or
+ * {@code ADMIN} authority. Write endpoints ({@code POST}, {@code PUT}, {@code PATCH},
+ * {@code DELETE}) require {@code TENANT_OWNER} or {@code ADMIN} so that ordinary members
+ * remain read-only.
  *
  * <p>Every response uses the safe projection: curation fields ({@code confidence}, {@code source}
  * and the raw {@code metadata} document) are not exposed. The optional {@code masterVenueId}
@@ -71,10 +72,10 @@ public class VenueRestResource {
     this.venueService = venueService;
   }
 
-  // ─── Read surface (MEMBER) ────────────────────────────────────────────────
+  // ─── Read surface (MEMBER / TENANT_OWNER / ADMIN) ────────────────────────
 
   @GetMapping
-  @PreAuthorize("hasAuthority('MEMBER')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Search tenant venues",
       description = "Keyword search over name, address and city, with an optional exact-city "
@@ -89,7 +90,7 @@ public class VenueRestResource {
                    content = @Content(schema = @Schema(implementation = VenueDtos.VenueListResponse.class))),
       @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content)
+      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenueListResponse> search(
       @Parameter(description = "Free-text keyword matched against name, address and city")
@@ -108,7 +109,7 @@ public class VenueRestResource {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAuthority('MEMBER')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Get a tenant venue",
       description = "Returns the safe projection of the given tenant venue. "
@@ -121,7 +122,7 @@ public class VenueRestResource {
                    content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
       @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content),
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> getById(
