@@ -30,6 +30,7 @@ import com.iqkv.docintelligence.venue.VenueAssetMapper;
 import com.iqkv.docintelligence.venue.VenueMapper;
 import com.iqkv.foundation.tenancy.TenantContext;
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.Http;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
@@ -133,6 +134,15 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     // Re-read so created_at / updated_at reflect the database-computed values.
     final VenueAsset saved = assetMapper.findById(assetId)
         .orElseThrow(() -> new IllegalStateException("Inserted venue asset not found: " + assetId));
+
+    // Set primary_photo_url on the venue when this is the first confirmed PHOTO asset.
+    if ("PHOTO".equalsIgnoreCase(saved.getAssetType())) {
+      final long photoCount = assetMapper.findPhotosByVenueId(venueId).size();
+      if (photoCount == 1) {
+        final String photoUrl = generatePresignedGetUrl(saved.getS3Key());
+        venueMapper.updatePrimaryPhotoUrl(venueId, photoUrl);
+      }
+    }
     log.info("Venue asset confirmed: assetId={}, venueId={}, tenantKey={}, size={}",
         assetId, venueId, tenantKey, stat.size());
     return VenueAssetDtoMapper.toResponse(saved);
@@ -150,6 +160,17 @@ public class VenueAssetServiceImpl implements VenueAssetService {
   public VenueAssetDtos.VenueAssetListResponse listPhotos(final UUID venueId) {
     requireVenue(venueId);
     return toList(assetMapper.findPhotosByVenueId(venueId));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public VenueAssetDtos.VenueAssetPublicListResponse listPhotosPublic(final UUID venueId) {
+    requireVenue(venueId);
+    final List<VenueAsset> photos = assetMapper.findPhotosByVenueId(venueId);
+    final List<VenueAssetDtos.VenueAssetPublicResponse> items = photos.stream()
+        .map(a -> VenueAssetDtoMapper.toPublicResponse(a, generatePresignedGetUrlSafe(a.getS3Key())))
+        .toList();
+    return new VenueAssetDtos.VenueAssetPublicListResponse(items, items.size());
   }
 
   @Override
@@ -212,7 +233,7 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     try {
       return presigningMinioClient.getPresignedObjectUrl(
           GetPresignedObjectUrlArgs.builder()
-              .method(io.minio.Http.Method.PUT)
+              .method(Http.Method.PUT)
               .bucket(storageProps.bucketName())
               .object(objectKey)
               .expiry(storageProps.upload().presignedUrlExpirationMinutes(), TimeUnit.MINUTES)
@@ -223,6 +244,29 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     }
   }
 
+  private String generatePresignedGetUrl(final String objectKey) {
+    try {
+      return presigningMinioClient.getPresignedObjectUrl(
+          GetPresignedObjectUrlArgs.builder()
+              .method(Http.Method.GET)
+              .bucket(storageProps.bucketName())
+              .object(objectKey)
+              .expiry(storageProps.upload().presignedUrlExpirationMinutes(), TimeUnit.MINUTES)
+              .build());
+    } catch (final Exception e) {
+      log.error("Failed to generate presigned GET URL for objectKey={}", objectKey, e);
+      throw new RuntimeException("Failed to generate presigned GET URL", e);
+    }
+  }
+
+  /** Like {@link #generatePresignedGetUrl} but returns {@code null} on failure — used for lists. */
+  private String generatePresignedGetUrlSafe(final String objectKey) {
+    try {
+      return generatePresignedGetUrl(objectKey);
+    } catch (final Exception e) {
+      return null;
+    }
+  }
   private StatObjectResponse statObject(final String objectKey) {
     try {
       return minioClient.statObject(

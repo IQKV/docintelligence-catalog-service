@@ -100,4 +100,32 @@ public final class VenueAssetDtos {
    */
   public record VenueAssetListResponse(List<VenueAssetResponse> items, long totalElements) {
   }
+
+  /**
+   * Tenant-facing read projection for a venue asset — exposes a time-limited presigned GET URL
+   * ({@code sourceUrl}) instead of the raw {@code s3Key}. Used by the public photos endpoint so
+   * the browser can render the image directly without resolving storage credentials.
+   */
+  public record VenueAssetPublicResponse(
+      UUID id,
+      UUID venueId,
+      String assetType,
+      String photoCategory,
+      Integer displayOrder,
+      String label,
+      String fileName,
+      String contentType,
+      Long sizeBytes,
+      /** Time-limited presigned GET URL; null when URL generation fails (log + degrade). */
+      String sourceUrl,
+      UUID uploadedBy,
+      Instant createdAt,
+      Instant updatedAt) {
+  }
+
+  /**
+   * Tenant-facing photo collection — items carry {@code sourceUrl} presigned GET URLs.
+   */
+  public record VenueAssetPublicListResponse(List<VenueAssetPublicResponse> items, long totalElements) {
+  }
 }

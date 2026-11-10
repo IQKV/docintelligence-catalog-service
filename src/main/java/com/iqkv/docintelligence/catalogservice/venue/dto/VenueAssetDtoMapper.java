@@ -43,4 +43,22 @@ public final class VenueAssetDtoMapper {
         asset.getCreatedAt(),
         asset.getUpdatedAt());
   }
+
+  public static VenueAssetDtos.VenueAssetPublicResponse toPublicResponse(final VenueAsset asset,
+                                                                         final String sourceUrl) {
+    return new VenueAssetDtos.VenueAssetPublicResponse(
+        asset.getId(),
+        asset.getVenueId(),
+        asset.getAssetType(),
+        asset.getPhotoCategory(),
+        asset.getDisplayOrder(),
+        asset.getLabel(),
+        asset.getFileName(),
+        asset.getContentType(),
+        asset.getSizeBytes(),
+        sourceUrl,
+        asset.getUploadedBy(),
+        asset.getCreatedAt(),
+        asset.getUpdatedAt());
+  }
 }
