@@ -66,14 +66,51 @@ On creation, omitted `metadata` falls back to the canonical empty document and o
 
 Read-only access to the tenant's own venue records for tenant members (`MEMBER` authority). Tenant context is resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim; rows are isolated by tenant schema, so a member sees only their tenant's venues.
 
-Responses use the safe projection: `metadata`, `confidence` and `source` are not exposed; the optional `masterVenueId` relation key is kept so a member can see whether a venue is linked to a master catalog entry.
+Responses use the safe projection: `confidence` and `source` are not exposed; `metadata` is included so tenants can read and edit their own venue metadata document; the optional `masterVenueId` relation key is kept.
 
-| Method | Path           | Auth         | Description                                                                                                                              |
-| ------ | -------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/venues`      | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` (default 20) and `offset`, ordered by name or recently added |
-| `GET`  | `/venues/{id}` | JWT `MEMBER` | Fetch a single tenant venue by UUID                                                                                                      |
+| Method | Path                      | Auth         | Description                                                                                                                              |
+| ------ | ------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/venues`                 | JWT `MEMBER` | Search by keyword (`search`) and exact city (`city`), paginated via `limit` (default 20) and `offset`, ordered by name or recently added |
+| `GET`  | `/venues/{id}`            | JWT `MEMBER` | Fetch a single tenant venue by UUID                                                                                                      |
+| `GET`  | `/venues/search/semantic` | JWT `MEMBER` | AI semantic search — query planner extracts hard filters, ranks embedded venues by cosine similarity                                     |
 
-Every venue path answers `400` when the tenant ID cannot be resolved, `401` for a missing or invalid JWT, `403` when the caller lacks the `MEMBER` authority, and `404` when the venue does not exist in the tenant schema.
+Every venue path answers `400` when the tenant ID cannot be resolved, `401` for a missing or invalid JWT, `403` when the caller lacks the required authority, and `404` when the venue does not exist in the tenant schema.
+
+### Venues (Write Surface — Tenant Owner / Admin)
+
+Write endpoints for the tenant's own venue records. Require `TENANT_OWNER` or `ADMIN` authority. Curation fields (`confidence`, `source`) are never accepted or returned; `metadata` is managed separately via the metadata PATCH endpoint.
+
+| Method   | Path                    | Auth                       | Description                                                                                    |
+| -------- | ----------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `POST`   | `/venues`               | JWT `TENANT_OWNER`/`ADMIN` | Create a venue; curation fields initialised to safe defaults; returns `201`                    |
+| `PUT`    | `/venues/{id}`          | JWT `TENANT_OWNER`/`ADMIN` | Full replace of tenant-visible fields; curation fields untouched; returns `404` if missing     |
+| `PATCH`  | `/venues/{id}`          | JWT `TENANT_OWNER`/`ADMIN` | Partial update — only non-null fields overwritten; curation fields never modified              |
+| `PATCH`  | `/venues/{id}/metadata` | JWT `TENANT_OWNER`/`ADMIN` | Replace the full metadata document string; all other fields left untouched                     |
+| `DELETE` | `/venues/{id}`          | JWT `TENANT_OWNER`/`ADMIN` | Permanently delete the venue; returns `204`                                                    |
+| `DELETE` | `/venues`               | JWT `TENANT_OWNER`/`ADMIN` | Bulk delete up to 100 venues (JSON body `{"ids":[...]}`); idempotent; returns `204`            |
+
+`PATCH /venues/{id}/metadata` accepts `{"metadata": "<full MetadataDocument JSON string>"}`. The client always sends the complete document — no delta merge is performed. `DELETE /venues` silently ignores ids that match no venue; empty or oversized id lists return `400`.
+
+### Venue Assets (Tenant Surface)
+
+Two-phase presigned upload for venue photos and attachments, plus list, detail, and delete. Upload initiation and reads require `TENANT_OWNER` or `MEMBER`; delete requires `TENANT_OWNER` or `ADMIN`. Assets are nested under their owning venue.
+
+**Upload flow:**
+
+1. `POST /venues/{venueId}/assets/initiate` — declare `fileName`, `contentType` and `sizeBytes`; the service validates against the upload policy, mints a tenant-scoped object key and a presigned S3 `PUT` URL, and returns `assetId` + `objectKey`. No row is persisted yet.
+2. Upload the file directly to MinIO using the presigned `PUT` URL.
+3. `POST /venues/{venueId}/assets/{id}/confirm` — send `objectKey`, `fileName`, and taxonomy fields (`assetType`, `photoCategory`, `displayOrder`, `label`). The service validates key ownership, calls `statObject` to confirm the object exists, reads actual size and content type from storage, and persists the asset row.
+
+| Method   | Path                                    | Auth                        | Description                                                                                                       |
+| -------- | --------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/venues/{venueId}/assets/initiate`     | JWT `TENANT_OWNER`/`MEMBER` | Mint a presigned `PUT` URL; returns `assetId`, `objectKey`, `presignedUploadUrl`, `expiresInMinutes`              |
+| `POST`   | `/venues/{venueId}/assets/{id}/confirm` | JWT `TENANT_OWNER`/`MEMBER` | Confirm object in storage; persist asset metadata; returns `400` on key mismatch or missing object                |
+| `GET`    | `/venues/{venueId}/assets`              | JWT `TENANT_OWNER`/`MEMBER` | List all assets of the venue ordered by `displayOrder`                                                            |
+| `GET`    | `/venues/{venueId}/assets/photos`       | JWT `TENANT_OWNER`/`MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                                               |
+| `GET`    | `/venues/{venueId}/assets/{id}`         | JWT `TENANT_OWNER`/`MEMBER` | Fetch a single asset; returns `404` when the venue or asset is not found or not owned by that venue               |
+| `DELETE` | `/venues/{venueId}/assets/{id}`         | JWT `TENANT_OWNER`/`ADMIN`  | Delete asset row and remove object from storage (best-effort); returns `204`; returns `404` if not found          |
+
+Storage removal on delete is best-effort: a MinIO failure is logged but does not prevent the row from being deleted.
 
 ---
 
