@@ -184,9 +184,30 @@ public final class VenueDtos {
       String city,
       BigDecimal locationLat,
       BigDecimal locationLng,
+      String primaryPhotoUrl,
       String metadata,
       BigDecimal confidence,
       String source,
+      UUID masterVenueId,
+      Instant createdAt,
+      Instant updatedAt,
+      double similarity) {
+  }
+
+  /**
+   * Tenant-facing semantic search item — the safe projection plus a {@code similarity} score in
+   * the range [0, 1] (1 = identical). Curation fields ({@code metadata}, {@code confidence},
+   * {@code source}) are not exposed; the denormalised {@code primaryPhotoUrl} lets a caller render
+   * a thumbnail without loading the asset list.
+   */
+  public record VenuePublicSemanticSearchResult(
+      UUID id,
+      String name,
+      String address,
+      String city,
+      BigDecimal locationLat,
+      BigDecimal locationLng,
+      String primaryPhotoUrl,
       UUID masterVenueId,
       Instant createdAt,
       Instant updatedAt,
@@ -217,5 +238,17 @@ public final class VenueDtos {
    */
   public record VenueSemanticSearchResponse(List<VenueSemanticSearchResult> items, long totalElements,
                                             VenueSemanticSearchFilters appliedFilters) {
+  }
+
+  /**
+   * Tenant-facing semantic search result page — the safe projection of the same ranking.
+   *
+   * @param items          ranked by similarity descending
+   * @param totalElements  total number of embedded venues matching the same hard filters
+   * @param appliedFilters filters the query planner applied, or an all-null filter set when none
+   */
+  public record VenuePublicSemanticSearchResponse(List<VenuePublicSemanticSearchResult> items,
+                                                  long totalElements,
+                                                  VenueSemanticSearchFilters appliedFilters) {
   }
 }

@@ -171,6 +171,32 @@ class VenueServiceImplTest {
     verify(venueMapper, never()).deleteById(any(UUID.class));
   }
 
+  @Test
+  @DisplayName("semanticSearchPublic maps the ranked items to the tenant safe projection")
+  void semanticSearchPublicMapsToSafeProjection() {
+    final UUID id = UUID.randomUUID();
+    final VenueDtos.VenueSemanticSearchResult adminResult = new VenueDtos.VenueSemanticSearchResult(
+        id, "Grand Hall", "1 Rue", "Paris",
+        new BigDecimal("48.856614"), new BigDecimal("2.352221"),
+        "https://cdn.example.com/grand-hall.jpg",
+        "{\"_schema_version\":1}", new BigDecimal("0.90"), "MANUAL", null,
+        Instant.now(), Instant.now(), 0.87);
+    final VenueDtos.VenueSemanticSearchFilters filters = new VenueDtos.VenueSemanticSearchFilters(
+        "Paris", List.of("hotel"), null, null, null, List.of(), null);
+    when(semanticSearchService.search("rooftop", "Paris", 20)).thenReturn(
+        new VenueDtos.VenueSemanticSearchResponse(List.of(adminResult), 1L, filters));
+
+    final var response = service.semanticSearchPublic("rooftop", "Paris", 20);
+
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.totalElements()).isEqualTo(1L);
+    assertThat(response.appliedFilters()).isSameAs(filters);
+    final var item = response.items().get(0);
+    assertThat(item.id()).isEqualTo(id);
+    assertThat(item.primaryPhotoUrl()).isEqualTo("https://cdn.example.com/grand-hall.jpg");
+    assertThat(item.similarity()).isEqualTo(0.87);
+  }
+
   private Venue savedVenue(final UUID id, final String name) {
     final Venue venue = new Venue();
     venue.setId(id);

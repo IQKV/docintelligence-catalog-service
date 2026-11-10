@@ -177,6 +177,20 @@ public class VenueServiceImpl implements VenueService {
     return semanticSearchService.search(query, city, limit);
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(final String query,
+                                                                          final String city,
+                                                                          final int limit) {
+    log.info("Delegating tenant venue semantic search (safe projection): q='{}', city={}, limit={}",
+        query, city, limit);
+    final VenueDtos.VenueSemanticSearchResponse result = semanticSearchService.search(query, city, limit);
+    return new VenueDtos.VenuePublicSemanticSearchResponse(
+        result.items().stream().map(VenueDtoMapper::toPublicSemanticResult).toList(),
+        result.totalElements(),
+        result.appliedFilters());
+  }
+
   private Venue requireVenue(final UUID id) {
     return venueMapper.findById(id)
         .orElseThrow(() -> new VenueNotFoundException(id));

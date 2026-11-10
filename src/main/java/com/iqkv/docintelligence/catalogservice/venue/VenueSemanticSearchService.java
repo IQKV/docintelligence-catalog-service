@@ -65,7 +65,7 @@ class VenueSemanticSearchService {
 
   private static final String SEARCH_SELECT = """
       SELECT id, name, address, city, location_lat, location_lng,
-             metadata, confidence, source, master_venue_id,
+             primary_photo_url, metadata, confidence, source, master_venue_id,
              created_at, updated_at,
              1 - (embedding <=> ?::vector) AS similarity
       FROM %s
@@ -159,6 +159,7 @@ class VenueSemanticSearchService {
               rs.getString("city"),
               rs.getBigDecimal("location_lat"),
               rs.getBigDecimal("location_lng"),
+              rs.getString("primary_photo_url"),
               rs.getString("metadata"),
               rs.getBigDecimal("confidence"),
               rs.getString("source"),

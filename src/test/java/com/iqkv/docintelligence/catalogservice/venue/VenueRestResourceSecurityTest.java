@@ -97,6 +97,21 @@ class VenueRestResourceSecurityTest {
         .andExpect(status().isForbidden());
   }
 
+  @Test
+  @DisplayName("Tenant venue semantic search rejects an anonymous caller")
+  void tenantSemanticSearchRejectsAnonymous() throws Exception {
+    mockMvc.perform(get(TENANT_PATH + "/search/semantic?q=hotel").header(TENANT_HEADER, TENANT_KEY))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Tenant venue semantic search rejects an authenticated caller without MEMBER authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void tenantSemanticSearchRejectsMissingMemberAuthority() throws Exception {
+    mockMvc.perform(get(TENANT_PATH + "/search/semantic?q=hotel").header(TENANT_HEADER, TENANT_KEY))
+        .andExpect(status().isForbidden());
+  }
+
   // ─── Write surface: anonymous callers are rejected ────────────────────────
 
   private static final String JSON_WRITE = "{\"name\":\"Test Venue\"}";

@@ -130,6 +130,36 @@ public class VenueRestResource {
     return ResponseEntity.ok(venueService.getPublicVenue(id));
   }
 
+  @GetMapping("/search/semantic")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Semantic search over tenant venues",
+      description = "Natural-language search: an AI query planner splits the query into hard "
+                    + "filters (city, venue type, capacity, catering policy, amenities, "
+                    + "accessibility) and a residual vector query, then ranks the tenant's venues "
+                    + "by cosine similarity. Returns the safe projection of the ranked items plus "
+                    + "the filters that were applied. Only venues with an embedding are considered.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Ranked tenant venues",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicSemanticSearchResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicSemanticSearchResponse> semanticSearch(
+      @Parameter(description = "Natural-language search query")
+      @RequestParam final String q,
+      @Parameter(description = "Optional explicit city filter; overrides the city the planner derives")
+      @RequestParam(required = false) final String city,
+      @Parameter(description = "Maximum number of venues to return (capped at 100)")
+      @RequestParam(defaultValue = "20") final int limit) {
+    final int effectiveLimit = Math.min(limit, 100);
+    return ResponseEntity.ok(venueService.semanticSearchPublic(q, city, effectiveLimit));
+  }
+
   // ─── Write surface (TENANT_OWNER / ADMIN) ────────────────────────────────
 
   @PostMapping

@@ -58,4 +58,6 @@ public interface VenueService {
   void deletePublicVenues(java.util.List<UUID> ids);
 
   VenueDtos.VenueSemanticSearchResponse semanticSearch(String query, String city, int limit);
+
+  VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(String query, String city, int limit);
 }

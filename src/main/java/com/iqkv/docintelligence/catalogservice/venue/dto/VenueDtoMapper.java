@@ -154,6 +154,27 @@ public final class VenueDtoMapper {
   }
 
   /**
+   * Narrows an admin semantic result to the tenant safe projection — curation fields
+   * ({@code metadata}, {@code confidence}, {@code source}) are dropped; the denormalised
+   * {@code primaryPhotoUrl} and the optional {@code masterVenueId} relation key are kept.
+   */
+  public static VenueDtos.VenuePublicSemanticSearchResult toPublicSemanticResult(
+      final VenueDtos.VenueSemanticSearchResult result) {
+    return new VenueDtos.VenuePublicSemanticSearchResult(
+        result.id(),
+        result.name(),
+        result.address(),
+        result.city(),
+        result.locationLat(),
+        result.locationLng(),
+        result.primaryPhotoUrl(),
+        result.masterVenueId(),
+        result.createdAt(),
+        result.updatedAt(),
+        result.similarity());
+  }
+
+  /**
    * Builds a new tenant venue row from a tenant write request, applying a generated id.
    * Curation fields are intentionally left null here — the service sets its defaults after
    * calling this method.
