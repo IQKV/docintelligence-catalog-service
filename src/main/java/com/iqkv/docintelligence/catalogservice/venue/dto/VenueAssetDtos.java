@@ -116,7 +116,6 @@ public final class VenueAssetDtos {
       String fileName,
       String contentType,
       Long sizeBytes,
-      /** Time-limited presigned GET URL; null when URL generation fails (log + degrade). */
       String sourceUrl,
       UUID uploadedBy,
       Instant createdAt,

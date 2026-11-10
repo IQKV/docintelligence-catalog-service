@@ -259,7 +259,9 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     }
   }
 
-  /** Like {@link #generatePresignedGetUrl} but returns {@code null} on failure — used for lists. */
+  /**
+   * Like {@link #generatePresignedGetUrl} but returns {@code null} on failure — used for lists.
+   */
   private String generatePresignedGetUrlSafe(final String objectKey) {
     try {
       return generatePresignedGetUrl(objectKey);
@@ -267,6 +269,7 @@ public class VenueAssetServiceImpl implements VenueAssetService {
       return null;
     }
   }
+
   private StatObjectResponse statObject(final String objectKey) {
     try {
       return minioClient.statObject(
