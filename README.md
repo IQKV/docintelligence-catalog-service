@@ -6,7 +6,9 @@ GitHub template for the iQ Key Value platform. Extends the standard `foundation-
 
 This template provides:
 
-- **Maven single-module layout** — standard `src/main/java` structure with MyBatis, PostgreSQL, Liquibase, and RabbitMQ wired up
+- **Venue catalog** — multi-tenant venue CRUD with safe projection (curation fields hidden from tenant users); write endpoints require `TENANT_OWNER`/`ADMIN` authority; read endpoints are open to `MEMBER`
+- **Venue asset uploads** — two-phase presigned MinIO upload for venue photos and attachments (initiate → direct upload → confirm) nested under the owning venue, with tenant and admin surfaces mirrored
+- **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
 - **Ollama connectivity** — LLM client wired to a local Ollama instance via `spring.ai.ollama.*` (base URL and model configurable per environment)
 - **Object storage** — MinIO (S3-compatible) client bound to a private `catalog-assets` bucket, served to clients through presigned URLs
 - **Multi-profile Spring config** — `local`, `sit`, `uat`, `prd` profiles with correct defaults per environment
@@ -58,6 +60,34 @@ Read-only tenant surface. Responses use the public projection — `confidence`, 
 | `GET`  | `/master-venues/{id}/assets` | JWT `MEMBER` | List all assets of a venue, ordered by `displayOrder`, without ingestion provenance    |
 | `GET`  | `/master-venues/{id}/photos` | JWT `MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                    |
 
+### Venues
+
+Full CRUD over the tenant's own venue records. Read endpoints require the `MEMBER` authority; write endpoints require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. Responses use the safe projection — `metadata`, `confidence` and `source` are not exposed; the optional `masterVenueId` relation key is kept.
+
+| Method   | Path           | Auth                       | Description                                                                                                 |
+| :------- | :------------- | :------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/venues`      | JWT `MEMBER`               | Search by keyword (`search`) and exact city (`city`), with optional sort; paginated via `limit` / `offset`  |
+| `GET`    | `/venues/{id}` | JWT `MEMBER`               | Fetch a single tenant venue by UUID                                                                         |
+| `POST`   | `/venues`      | JWT `TENANT_OWNER`/`ADMIN` | Create a venue in the active tenant schema; curation fields initialised to safe defaults; returns `201`     |
+| `PUT`    | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN` | Full replace of tenant-visible fields; curation fields are not modified; returns `404` if not found         |
+| `PATCH`  | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN` | Partial update — only non-null fields are overwritten; curation fields are never modified                   |
+| `DELETE` | `/venues/{id}` | JWT `TENANT_OWNER`/`ADMIN` | Permanently deletes the venue; returns `204`                                                                |
+| `DELETE` | `/venues`      | JWT `TENANT_OWNER`/`ADMIN` | Bulk delete up to 100 venues by id list; idempotent; returns `204`                                          |
+
+`DELETE /venues` takes a JSON body of `{"ids": [uuid, ...]}` (1–100 ids). Ids that match no venue are silently ignored; empty or oversized lists are rejected with `400`.
+
+### Venue assets
+
+Two-phase presigned upload for venue photos and attachments, plus list and detail reads. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim.
+
+| Method | Path                                    | Auth                        | Description                                                                                                                              |
+| :----- | :-------------------------------------- | :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/venues/{venueId}/assets/initiate`     | JWT `TENANT_OWNER`/`MEMBER` | Validate declared content type and size, mint a presigned S3 `PUT` URL, return `assetId` + `objectKey`; no row persisted until confirm  |
+| `POST` | `/venues/{venueId}/assets/{id}/confirm` | JWT `TENANT_OWNER`/`MEMBER` | Validate object key and confirm object exists in storage; persists asset metadata; returns `400` on key mismatch or missing object       |
+| `GET`  | `/venues/{venueId}/assets`              | JWT `TENANT_OWNER`/`MEMBER` | List all assets of the venue ordered by `displayOrder`                                                                                   |
+| `GET`  | `/venues/{venueId}/assets/photos`       | JWT `TENANT_OWNER`/`MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                                                                      |
+| `GET`  | `/venues/{venueId}/assets/{id}`         | JWT `TENANT_OWNER`/`MEMBER` | Fetch a single asset; returns `404` when the venue or asset is not found or not owned by that venue                                      |
+
 ### Admin
 
 Full CRUD over the master venue catalog, using the admin projection (all curation fields included). Admin asset reads also expose ingestion provenance such as `sourceUrl` and `provider`.
@@ -76,7 +106,7 @@ Full CRUD over the master venue catalog, using the admin projection (all curatio
 
 `DELETE /admin/master-venues` takes a JSON body of `{"ids": [uuid, ...]}` (1–100 ids) and removes every matching venue in one transaction. Ids that match no venue are silently ignored, so the request can be retried safely; empty or oversized id lists are rejected with `400`.
 
-> Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
+> Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT TENANT_OWNER/ADMIN` = tenant owner or admin authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
 
 ## Tech Stack
 
@@ -206,13 +236,29 @@ docker compose -f compose.container.yaml up -d
 │   ├── prometheus/     # Prometheus configuration
 │   └── grafana/        # Grafana dashboards and datasources
 ├── src/main/java/com/iqkv/docintelligence/catalogservice/
-│   ├── {domain}/       # Feature module (vertical slice)
-│   │   ├── {Entity}.java
-│   │   ├── {Entity}Mapper.java
-│   │   ├── {Entity}Service.java
-│   │   ├── {Entity}RestResource.java
-│   │   ├── Admin{Entity}RestResource.java
-│   │   └── dto/
+│   ├── mastervenue/    # Master venue catalog — tenant read-only + admin full CRUD
+│   │   ├── dto/
+│   │   ├── AdminMasterVenueRestResource.java
+│   │   ├── MasterVenueRestResource.java
+│   │   ├── MasterVenueService.java
+│   │   └── MasterVenueServiceImpl.java
+│   ├── venue/          # Tenant venue catalog — tenant CRUD + admin full CRUD + semantic search
+│   │   ├── dto/
+│   │   ├── AdminVenueAssetRestResource.java
+│   │   ├── AdminVenueRestResource.java
+│   │   ├── VenueAssetRestResource.java
+│   │   ├── VenueAssetService.java
+│   │   ├── VenueAssetServiceImpl.java
+│   │   ├── VenueRestResource.java
+│   │   ├── VenueService.java
+│   │   └── VenueServiceImpl.java
+│   ├── venuedeck/      # Venue deck upload — two-phase presigned MinIO upload + list/detail
+│   │   ├── dto/
+│   │   ├── AdminVenueDeckRestResource.java
+│   │   ├── VenueDeckRestResource.java
+│   │   ├── VenueDeckService.java
+│   │   └── VenueDeckServiceImpl.java
+│   ├── ping/           # Reachability probes across the three security tiers
 │   ├── infrastructure/ # Spring config, security, MyBatis, RabbitMQ setup
 │   └── shared/         # Common exceptions, utilities, value objects
 ```
