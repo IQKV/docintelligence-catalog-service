@@ -149,6 +149,15 @@ public class VenueServiceImpl implements VenueService {
   }
 
   @Override
+  public VenueDtos.VenuePublicResponse patchVenueMetadata(final UUID id, final String metadata) {
+    final Venue venue = requireVenue(id);
+    venue.setMetadata(metadata);
+    venueMapper.update(venue);
+    embeddingService.embed(venue);
+    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+  }
+
+  @Override
   public void deletePublicVenue(final UUID id) {
     requireVenue(id);
     venueMapper.deleteById(id);

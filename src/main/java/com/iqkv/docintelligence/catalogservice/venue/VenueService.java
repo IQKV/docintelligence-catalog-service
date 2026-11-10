@@ -53,6 +53,8 @@ public interface VenueService {
 
   VenueDtos.VenuePublicResponse patchPublicVenue(UUID id, VenueDtos.VenuePublicPatchRequest request);
 
+  VenueDtos.VenuePublicResponse patchVenueMetadata(UUID id, String metadata);
+
   void deletePublicVenue(UUID id);
 
   void deletePublicVenues(java.util.List<UUID> ids);

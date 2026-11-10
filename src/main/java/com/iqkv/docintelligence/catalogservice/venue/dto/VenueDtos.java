@@ -128,6 +128,16 @@ public final class VenueDtos {
   }
 
   /**
+   * Tenant metadata-only patch payload. Replaces the {@code metadata} string of the venue with
+   * the caller-supplied value. All other fields (name, address, curation signals) are left
+   * untouched. The value is the full serialised {@code MetadataDocument} JSON — the client
+   * always sends the entire document, never a delta.
+   */
+  public record VenueMetadataPatchRequest(
+      @NotBlank String metadata) {
+  }
+
+  /**
    * Tenant partial-update payload. A {@code null} field means "leave unchanged"; there is no
    * way to clear a field with this request, which is the documented limitation of a merge-style
    * PATCH. In particular {@code masterVenueId} can be set but not cleared to {@code null} via

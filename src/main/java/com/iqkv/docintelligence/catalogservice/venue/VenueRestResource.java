@@ -259,6 +259,33 @@ public class VenueRestResource {
     return ResponseEntity.noContent().build();
   }
 
+  @PatchMapping("/{id}/metadata")
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Update tenant venue metadata",
+      description = "Replaces the metadata document of the given venue. The request body must "
+                    + "contain the full serialised MetadataDocument JSON — no delta merge is "
+                    + "performed. All other venue fields (name, address, curation signals) are "
+                    + "left untouched. Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Metadata updated",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Request validation failed or tenant ID unresolvable",
+                   content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403",
+                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicResponse> patchMetadata(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @Valid @RequestBody final VenueDtos.VenueMetadataPatchRequest request) {
+    return ResponseEntity.ok(venueService.patchVenueMetadata(id, request.metadata()));
+  }
+
   @DeleteMapping
   @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
   @Operation(
