@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Tenant venue assets — the photos and attachments of a tenant venue. Lives in the
+         t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before these changesets
+         run, so no schemaName is set on the statements below).
+
+         Replaces venue_documents (20261109120001): this is the tenant counterpart of
+         public.master_venue_asset, so a tenant asset carries the same taxonomy instead of being a
+         flat PDF-deck record. The row owner is the tenant venue; the master-only provenance
+         columns (source_url, provider) have no tenant meaning — a tenant asset arrives through the
+         presigned upload flow, so uploaded_by is carried instead. Deleting the venue deletes its
+         assets. -->
+
+    <changeSet id="20261109150000-create-venue-assets" author="iqkv">
+
+        <createTable tableName="venue_assets">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="venue_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="fk_venue_assets_venue"
+                             references="venues(id)" deleteCascade="true"/>
+            </column>
+            <!-- Asset taxonomy shared with public.master_venue_asset: PHOTO, FLOOR_PLAN, … -->
+            <column name="asset_type" type="VARCHAR(50)"/>
+            <!-- Only set when asset_type is PHOTO. -->
+            <column name="photo_category" type="VARCHAR(50)"/>
+            <column name="display_order" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label" type="VARCHAR(255)"/>
+            <column name="file_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_type" type="VARCHAR(100)"/>
+            <column name="size_bytes" type="BIGINT"/>
+            <!-- Tenant-scoped S3/MinIO object key (embeds tenantKey, venueId and assetId). -->
+            <column name="s3_key" type="VARCHAR(512)"/>
+            <!-- IAM user id of the uploader. -->
+            <column name="uploaded_by" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- One row per asset of a venue, so re-uploading the same file name refreshes the row
+             instead of duplicating it. -->
+        <addUniqueConstraint tableName="venue_assets" columnNames="venue_id, file_name"
+                             constraintName="uq_venue_assets_venue_file"/>
+
+        <createIndex tableName="venue_assets" indexName="idx_venue_assets_venue">
+            <column name="venue_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="venue_assets"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

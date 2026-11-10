@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- venue_documents is replaced by venue_assets (20261109150000), which carries the same upload
+         metadata plus the venue relation and the asset taxonomy. The flat, venue-less document
+         flow is gone, so the table is dropped outright. Lives in the t_{tenantKey} schema
+         (search_path is set by TenantLiquibaseRunner before these changesets run, so no schemaName
+         is set). -->
+
+    <changeSet id="20261109150002-drop-venue-documents" author="iqkv">
+
+        <dropTable tableName="venue_documents"/>
+
+        <rollback>
+            <createTable tableName="venue_documents">
+                <column name="id" type="UUID">
+                    <constraints primaryKey="true" nullable="false"/>
+                </column>
+                <column name="file_name" type="VARCHAR(255)">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="content_type" type="VARCHAR(100)">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="size_bytes" type="BIGINT">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="object_key" type="TEXT">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="status" type="VARCHAR(20)" defaultValue="UPLOADED">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="uploaded_by" type="UUID">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                    <constraints nullable="false"/>
+                </column>
+            </createTable>
+            <createIndex tableName="venue_documents" indexName="idx_venue_documents_uploaded_by">
+                <column name="uploaded_by"/>
+            </createIndex>
+            <createIndex tableName="venue_documents" indexName="idx_venue_documents_status">
+                <column name="status"/>
+            </createIndex>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

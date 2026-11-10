@@ -24,5 +24,12 @@
  * {@code t_{tenantKey}} schema. The {@code Venue} domain model and {@code VenueMapper} live in
  * the shared {@code com.iqkv:docintelligence-venue} artifact; this slice holds the HTTP surface,
  * the service contract and its implementation, and the DTOs.
+ *
+ * <p>Venue assets — a venue's photos and attachments — are a sub-resource of the venue, served by
+ * {@link com.iqkv.docintelligence.catalogservice.venue.VenueAssetRestResource} nested under
+ * {@code /api/v1/catalog/venues/{venueId}/assets} (and its platform-admin mirror
+ * {@link com.iqkv.docintelligence.catalogservice.venue.AdminVenueAssetRestResource}). They use the
+ * same tenant scoping and the two-phase presigned upload flow. The {@code VenueAsset} domain model
+ * and {@code VenueAssetMapper} live in the shared artifact too.
  */
 package com.iqkv.docintelligence.catalogservice.venue;

@@ -13,5 +13,8 @@
     <include file="db/changelog/tenant/20261109120001-create-venue-documents.xml"/>
     <include file="db/changelog/tenant/20261109130000-add-venue-embedding.xml"/>
     <include file="db/changelog/tenant/20261109140000-add-venue-metadata-items-gin.xml"/>
+    <include file="db/changelog/tenant/20261109150000-create-venue-assets.xml"/>
+    <include file="db/changelog/tenant/20261109150001-add-venue-primary-photo-url.xml"/>
+    <include file="db/changelog/tenant/20261109150002-drop-venue-documents.xml"/>
 
 </databaseChangeLog>

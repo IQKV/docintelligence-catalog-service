@@ -137,7 +137,7 @@ public final class VenueDtoMapper {
   /**
    * Builds the tenant-facing safe projection — curation fields ({@code metadata},
    * {@code confidence}, {@code source}) are dropped; the optional {@code masterVenueId}
-   * relation key is kept.
+   * relation key and the denormalised {@code primaryPhotoUrl} are kept.
    */
   public static VenueDtos.VenuePublicResponse toPublicResponse(final Venue venue) {
     return new VenueDtos.VenuePublicResponse(
@@ -147,6 +147,7 @@ public final class VenueDtoMapper {
         venue.getCity(),
         venue.getLocationLat(),
         venue.getLocationLng(),
+        venue.getPrimaryPhotoUrl(),
         venue.getMasterVenueId(),
         venue.getCreatedAt(),
         venue.getUpdatedAt());

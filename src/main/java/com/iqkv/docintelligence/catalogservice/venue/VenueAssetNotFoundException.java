@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-package com.iqkv.docintelligence.catalogservice.venuedeck;
+package com.iqkv.docintelligence.catalogservice.venue;
 
 import com.iqkv.docintelligence.catalogservice.shared.exception.ResourceNotFoundException;
 
 /**
- * Thrown when a requested venue deck (venue document) does not exist in the active tenant schema.
+ * Thrown when a requested venue asset does not exist in the active tenant schema, or exists but is
+ * not owned by the venue named in the request path.
  *
  * <p>Caught by {@code GlobalExceptionHandler}, which maps it to HTTP 404 with an RFC-7807 problem
  * detail body.
  */
-public class VenueDeckNotFoundException extends ResourceNotFoundException {
+public class VenueAssetNotFoundException extends ResourceNotFoundException {
 
-  public VenueDeckNotFoundException(final Object id) {
-    super("Venue deck not found: " + id);
+  public VenueAssetNotFoundException(final Object id) {
+    super("Venue asset not found: " + id);
   }
 }

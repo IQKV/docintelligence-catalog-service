@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.iqkv.docintelligence.catalogservice.venuedeck;
+package com.iqkv.docintelligence.catalogservice.venue;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,19 +35,21 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
- * Security contract for the admin venue deck endpoints.
+ * Security contract for the admin venue asset endpoints.
  *
  * <p>MockMvc is built from the web application context directly so the full security chain runs
- * in the real order. The path is under {@code /admin/}, so {@code TenantExtractionFilter} does
- * not run and {@code SecurityConfig} enforces the {@code PLATFORM_ADMIN} authority — the
+ * in the real order. The path is under {@code /admin/}, so {@code TenantExtractionFilter} does not
+ * run and {@code SecurityConfig} enforces the {@code PLATFORM_ADMIN} authority — the
  * {@code {tenantKey}} path variable is handled by the controller, not the tenant filter.
  */
 @SpringBootTest(classes = {CatalogServiceApplication.class})
 @ActiveProfiles("test")
-class AdminVenueDeckRestResourceSecurityTest {
+class AdminVenueAssetRestResourceSecurityTest {
 
-  private static final String ADMIN_PATH = "/api/v1/catalog/admin/xk7f2b9a/venue-decks";
-  private static final String UUID_ZERO = "00000000-0000-0000-0000-000000000001";
+  private static final String VENUE_ID = "00000000-0000-0000-0000-000000000001";
+  private static final String ASSET_ID = "00000000-0000-0000-0000-000000000002";
+  private static final String ADMIN_PATH =
+      "/api/v1/catalog/admin/xk7f2b9a/venues/" + VENUE_ID + "/assets";
 
   @Autowired
   private WebApplicationContext webApplicationContext;
@@ -62,39 +64,46 @@ class AdminVenueDeckRestResourceSecurityTest {
   }
 
   @Test
-  @DisplayName("Admin venue deck list rejects an anonymous caller")
+  @DisplayName("Admin venue asset list rejects an anonymous caller")
   void adminListRejectsAnonymous() throws Exception {
     mockMvc.perform(get(ADMIN_PATH))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
-  @DisplayName("Admin venue deck detail rejects an anonymous caller")
-  void adminDetailRejectsAnonymous() throws Exception {
-    mockMvc.perform(get(ADMIN_PATH + "/" + UUID_ZERO))
+  @DisplayName("Admin venue asset photos rejects an anonymous caller")
+  void adminPhotosRejectsAnonymous() throws Exception {
+    mockMvc.perform(get(ADMIN_PATH + "/photos"))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
-  @DisplayName("Admin venue deck initiate rejects an anonymous caller")
+  @DisplayName("Admin venue asset detail rejects an anonymous caller")
+  void adminDetailRejectsAnonymous() throws Exception {
+    mockMvc.perform(get(ADMIN_PATH + "/" + ASSET_ID))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Admin venue asset initiate rejects an anonymous caller")
   void adminInitiateRejectsAnonymous() throws Exception {
     mockMvc.perform(post(ADMIN_PATH + "/initiate")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"fileName\":\"deck.pdf\",\"contentType\":\"application/pdf\",\"sizeBytes\":1024}"))
+            .content("{\"fileName\":\"asset.pdf\",\"contentType\":\"application/pdf\",\"sizeBytes\":1024}"))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
-  @DisplayName("Admin venue deck confirm rejects an anonymous caller")
+  @DisplayName("Admin venue asset confirm rejects an anonymous caller")
   void adminConfirmRejectsAnonymous() throws Exception {
-    mockMvc.perform(post(ADMIN_PATH + "/" + UUID_ZERO + "/confirm")
+    mockMvc.perform(post(ADMIN_PATH + "/" + ASSET_ID + "/confirm")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"objectKey\":\"k\",\"fileName\":\"deck.pdf\"}"))
+            .content("{\"objectKey\":\"k\",\"fileName\":\"asset.pdf\",\"assetType\":\"PHOTO\"}"))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
-  @DisplayName("Admin venue deck endpoints reject a caller without PLATFORM_ADMIN")
+  @DisplayName("Admin venue asset endpoints reject a caller without PLATFORM_ADMIN")
   @WithMockUser(authorities = "MEMBER")
   void adminEndpointsRejectNonPlatformAdmin() throws Exception {
     mockMvc.perform(get(ADMIN_PATH))
