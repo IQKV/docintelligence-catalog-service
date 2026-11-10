@@ -308,4 +308,65 @@ class VenueAssetServiceImplTest {
     verify(presigningMinioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
     verify(assetMapper, never()).insert(any());
   }
+
+  @Test
+  @DisplayName("deleteAsset throws when the venue does not exist")
+  void deleteAssetThrowsWhenVenueMissing() {
+    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.deleteAsset(VENUE_ID, UUID.randomUUID()))
+        .isInstanceOf(VenueNotFoundException.class);
+    verify(assetMapper, never()).deleteById(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("deleteAsset throws when the asset does not exist")
+  void deleteAssetThrowsWhenAssetMissing() {
+    stubVenue();
+    final UUID assetId = UUID.randomUUID();
+    when(assetMapper.findById(assetId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.deleteAsset(VENUE_ID, assetId))
+        .isInstanceOf(VenueAssetNotFoundException.class);
+    verify(assetMapper, never()).deleteById(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("deleteAsset throws when the asset belongs to another venue")
+  void deleteAssetRejectsForeignAsset() {
+    stubVenue();
+    final UUID assetId = UUID.randomUUID();
+    when(assetMapper.findById(assetId)).thenReturn(Optional.of(asset(assetId, UUID.randomUUID())));
+
+    assertThatThrownBy(() -> service.deleteAsset(VENUE_ID, assetId))
+        .isInstanceOf(VenueAssetNotFoundException.class);
+    verify(assetMapper, never()).deleteById(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("deleteAsset removes the object from storage and deletes the row")
+  void deleteAssetRemovesObjectAndRow() throws Exception {
+    stubVenue();
+    final UUID assetId = UUID.randomUUID();
+    when(assetMapper.findById(assetId)).thenReturn(Optional.of(asset(assetId, VENUE_ID)));
+
+    service.deleteAsset(VENUE_ID, assetId);
+
+    verify(minioClient).removeObject(any(io.minio.RemoveObjectArgs.class));
+    verify(assetMapper).deleteById(assetId);
+  }
+
+  @Test
+  @DisplayName("deleteAsset still deletes the row when storage removal fails")
+  void deleteAssetDeletesRowEvenIfStorageFails() throws Exception {
+    stubVenue();
+    final UUID assetId = UUID.randomUUID();
+    when(assetMapper.findById(assetId)).thenReturn(Optional.of(asset(assetId, VENUE_ID)));
+    doThrow(new RuntimeException("MinIO unavailable"))
+        .when(minioClient).removeObject(any(io.minio.RemoveObjectArgs.class));
+
+    service.deleteAsset(VENUE_ID, assetId);
+
+    verify(assetMapper).deleteById(assetId);
+  }
 }

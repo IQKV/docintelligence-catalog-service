@@ -30,10 +30,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -189,6 +191,33 @@ public class AdminVenueAssetRestResource {
     try {
       TenantContext.setCurrentTenant(tenantKey);
       return ResponseEntity.ok(venueAssetService.getAsset(venueId, id));
+    } finally {
+      TenantContext.clear();
+    }
+  }
+
+  @DeleteMapping("/{id}")
+  @Operation(
+      summary = "Delete a venue asset (platform admin)",
+      description = "Permanently deletes the asset row and removes the object from storage for the "
+                    + "tenant named in the path. Responds 404 when the venue does not exist, or "
+                    + "when the asset does not exist or is not owned by that venue. Storage removal "
+                    + "is best-effort: a storage failure is logged but does not prevent the row "
+                    + "from being deleted.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "Asset deleted", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — PLATFORM_ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue or asset not found", content = @Content)
+  })
+  public ResponseEntity<Void> delete(
+      @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId,
+      @Parameter(description = "Asset UUID") @PathVariable final UUID id) {
+    try {
+      TenantContext.setCurrentTenant(tenantKey);
+      venueAssetService.deleteAsset(venueId, id);
+      return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     } finally {
       TenantContext.clear();
     }

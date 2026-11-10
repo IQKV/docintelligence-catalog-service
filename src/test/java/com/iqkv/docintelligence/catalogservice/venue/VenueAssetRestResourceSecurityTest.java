@@ -17,6 +17,7 @@
 package com.iqkv.docintelligence.catalogservice.venue;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -132,6 +133,21 @@ class VenueAssetRestResourceSecurityTest {
             .header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"fileName\":\"asset.pdf\",\"contentType\":\"application/pdf\",\"sizeBytes\":1024}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("Delete rejects an anonymous caller once the tenant is resolved")
+  void deleteRejectsAnonymous() throws Exception {
+    mockMvc.perform(delete(BASE_PATH + "/" + ASSET_ID).header(TENANT_HEADER, TENANT_KEY))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Delete rejects an authenticated caller without TENANT_OWNER or ADMIN authority")
+  @WithMockUser(authorities = "MEMBER")
+  void deleteRejectsMemberAuthority() throws Exception {
+    mockMvc.perform(delete(BASE_PATH + "/" + ASSET_ID).header(TENANT_HEADER, TENANT_KEY))
         .andExpect(status().isForbidden());
   }
 }

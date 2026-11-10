@@ -49,4 +49,6 @@ public interface VenueAssetService {
   VenueAssetDtos.VenueAssetListResponse listPhotos(UUID venueId);
 
   VenueAssetDtos.VenueAssetResponse getAsset(UUID venueId, UUID assetId);
+
+  void deleteAsset(UUID venueId, UUID assetId);
 }

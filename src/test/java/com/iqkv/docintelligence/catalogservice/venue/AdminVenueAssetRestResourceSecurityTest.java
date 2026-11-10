@@ -17,6 +17,7 @@
 package com.iqkv.docintelligence.catalogservice.venue;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -107,6 +108,21 @@ class AdminVenueAssetRestResourceSecurityTest {
   @WithMockUser(authorities = "MEMBER")
   void adminEndpointsRejectNonPlatformAdmin() throws Exception {
     mockMvc.perform(get(ADMIN_PATH))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("Admin venue asset delete rejects an anonymous caller")
+  void adminDeleteRejectsAnonymous() throws Exception {
+    mockMvc.perform(delete(ADMIN_PATH + "/" + ASSET_ID))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Admin venue asset delete rejects a caller without PLATFORM_ADMIN")
+  @WithMockUser(authorities = "TENANT_OWNER")
+  void adminDeleteRejectsNonPlatformAdmin() throws Exception {
+    mockMvc.perform(delete(ADMIN_PATH + "/" + ASSET_ID))
         .andExpect(status().isForbidden());
   }
 }

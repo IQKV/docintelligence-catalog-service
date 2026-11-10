@@ -31,6 +31,7 @@ import com.iqkv.docintelligence.venue.VenueMapper;
 import com.iqkv.foundation.tenancy.TenantContext;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
 import org.slf4j.Logger;
@@ -161,6 +162,17 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     return VenueAssetDtoMapper.toResponse(asset);
   }
 
+  @Override
+  public void deleteAsset(final UUID venueId, final UUID assetId) {
+    requireVenue(venueId);
+    final VenueAsset asset = assetMapper.findById(assetId)
+        .filter(found -> venueId.equals(found.getVenueId()))
+        .orElseThrow(() -> new VenueAssetNotFoundException(assetId));
+    removeObject(asset.getS3Key());
+    assetMapper.deleteById(assetId);
+    log.info("Venue asset deleted: assetId={}, venueId={}, s3Key={}", assetId, venueId, asset.getS3Key());
+  }
+
   private VenueAssetDtos.VenueAssetListResponse toList(final List<VenueAsset> assets) {
     return new VenueAssetDtos.VenueAssetListResponse(
         assets.stream().map(VenueAssetDtoMapper::toResponse).toList(),
@@ -220,6 +232,19 @@ public class VenueAssetServiceImpl implements VenueAssetService {
               .build());
     } catch (final Exception e) {
       throw new InvalidUploadRequestException("Uploaded object not found in storage for key: " + objectKey);
+    }
+  }
+
+  private void removeObject(final String objectKey) {
+    try {
+      minioClient.removeObject(
+          RemoveObjectArgs.builder()
+              .bucket(storageProps.bucketName())
+              .object(objectKey)
+              .build());
+    } catch (final Exception e) {
+      // Log and continue — the row is deleted regardless; storage can be garbage-collected later.
+      log.warn("Failed to remove object from storage during asset delete: key={}", objectKey, e);
     }
   }
 }
