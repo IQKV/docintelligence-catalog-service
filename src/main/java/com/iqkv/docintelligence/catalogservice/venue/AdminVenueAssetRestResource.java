@@ -152,20 +152,21 @@ public class AdminVenueAssetRestResource {
   @Operation(
       summary = "List the photos of a venue (platform admin)",
       description = "Returns the assets of type PHOTO of the given venue of the tenant named in "
-                    + "the path, ordered by display order.")
+                    + "the path, ordered by display order. Mirrors the tenant surface by returning "
+                    + "the public projection with a presigned GET URL per photo.")
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "Photos of the venue",
-                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetListResponse.class))),
+                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetPublicListResponse.class))),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
       @ApiResponse(responseCode = "403", description = "Access denied — PLATFORM_ADMIN authority required", content = @Content),
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
-  public ResponseEntity<VenueAssetDtos.VenueAssetListResponse> listPhotos(
+  public ResponseEntity<VenueAssetDtos.VenueAssetPublicListResponse> listPhotos(
       @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
       @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId) {
     try {
       TenantContext.setCurrentTenant(tenantKey);
-      return ResponseEntity.ok(venueAssetService.listPhotos(venueId));
+      return ResponseEntity.ok(venueAssetService.listPhotosPublic(venueId));
     } finally {
       TenantContext.clear();
     }
