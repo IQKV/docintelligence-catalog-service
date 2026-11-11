@@ -49,6 +49,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("VenueAssetServiceImpl Unit Tests")
@@ -67,6 +68,8 @@ class VenueAssetServiceImplTest {
   private MinioClient minioClient;
   @Mock
   private MinioClient presigningMinioClient;
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
 
   private VenueAssetServiceImpl service;
 
@@ -76,7 +79,8 @@ class VenueAssetServiceImplTest {
     final ObjectStorageConfigurationProperties props = new ObjectStorageConfigurationProperties(
         "http://localhost:9000", "", "iqkv", "pw", "catalog-assets", "us-east-1", false,
         new ObjectStorageConfigurationProperties.Upload(MAX_SIZE, 60, List.of(ALLOWED_TYPE)));
-    service = new VenueAssetServiceImpl(venueMapper, assetMapper, minioClient, presigningMinioClient, props);
+    service = new VenueAssetServiceImpl(
+        venueMapper, assetMapper, minioClient, presigningMinioClient, props, eventPublisher);
   }
 
   @AfterEach
@@ -173,6 +177,46 @@ class VenueAssetServiceImplTest {
     final var response = service.initiateUpload(VENUE_ID, request, UUID.randomUUID());
 
     assertThat(response.objectKey()).endsWith("/assets/" + response.assetId() + "/.._.._etc_passwd");
+  }
+
+  @Test
+  @DisplayName("initiate without a venue returns a venue-less object key and reads no venue")
+  void initiateWithoutVenueOmitsVenueSegment() throws Exception {
+    when(presigningMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+        .thenReturn("http://presigned-url");
+    final var request = new VenueAssetDtos.InitiateAssetUploadRequest("asset.pdf", ALLOWED_TYPE, 1024L);
+
+    final var response = service.initiateUpload(request, UUID.randomUUID());
+
+    assertThat(response.objectKey()).isEqualTo(
+        "docintelligence/tenant/" + TENANT_KEY + "/assets/" + response.assetId() + "/asset.pdf");
+    verify(venueMapper, never()).findById(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("confirm without a venue persists a venue-less UPLOADED asset and publishes the event")
+  void confirmWithoutVenuePersistsAndPublishes() throws Exception {
+    final UUID assetId = UUID.randomUUID();
+    final String objectKey = "docintelligence/tenant/" + TENANT_KEY + "/assets/" + assetId + "/asset.pdf";
+
+    final StatObjectResponse stat = org.mockito.Mockito.mock(StatObjectResponse.class);
+    when(stat.size()).thenReturn(2048L);
+    when(stat.contentType()).thenReturn(ALLOWED_TYPE);
+    when(minioClient.statObject(any(StatObjectArgs.class))).thenReturn(stat);
+
+    when(assetMapper.findById(assetId)).thenReturn(Optional.of(asset(assetId, null)));
+
+    final var request = new VenueAssetDtos.ConfirmAssetUploadRequest(
+        objectKey, "asset.pdf", "DOCUMENT", null, 0, null);
+    final var response = service.confirmUpload(assetId, request, UUID.randomUUID());
+
+    final ArgumentCaptor<VenueAsset> captor = ArgumentCaptor.forClass(VenueAsset.class);
+    verify(assetMapper).insert(captor.capture());
+    assertThat(captor.getValue().getVenueId()).isNull();
+    assertThat(captor.getValue().getStatus()).isEqualTo(VenueAsset.STATUS_UPLOADED);
+    assertThat(response.venueId()).isNull();
+
+    verify(eventPublisher).publishEvent(any(VenueAssetUploadedEvent.class));
   }
 
   @Test

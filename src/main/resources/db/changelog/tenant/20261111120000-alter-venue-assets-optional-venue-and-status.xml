@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Venue assets may now exist before any venue: a PDF/CSV/image is uploaded first and the venue
+         record is derived from it asynchronously by docintelligence-catalog-processing-worker, so
+         venue_id becomes optional. A per-asset processing status drives that pipeline.
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before these
+         changesets run, so no schemaName is set on the statements below). -->
+
+    <changeSet id="20261111120000-alter-venue-assets-optional-venue-and-status" author="iqkv">
+
+        <!-- venue_id is optional: an uploaded file may be processed into a new venue. The FK and its
+             cascade are kept — a venue-less asset carries NULL until the worker links it. -->
+        <dropNotNullConstraint tableName="venue_assets" columnName="venue_id" columnDataType="UUID"/>
+
+        <!-- Processing lifecycle: UPLOADED -> PARSING -> EXTRACTED | FAILED. EXTRACTED is terminal
+             for an asset whose data is available (nothing to parse, e.g. a photo attached to a venue
+             directly). -->
+        <addColumn tableName="venue_assets">
+            <column name="status" type="VARCHAR(20)" defaultValue="UPLOADED">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Populated only when status is FAILED. -->
+            <column name="failure_reason" type="TEXT"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="venue_assets" columnName="failure_reason"/>
+            <dropColumn tableName="venue_assets" columnName="status"/>
+            <!-- Restores the original constraint; fails when venue-less rows still exist. -->
+            <addNotNullConstraint tableName="venue_assets" columnName="venue_id" columnDataType="UUID"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

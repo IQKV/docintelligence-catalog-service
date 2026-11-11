@@ -38,6 +38,7 @@ import io.minio.StatObjectResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,9 +56,14 @@ import org.springframework.transaction.annotation.Transactional;
  * (so a non-existent upload cannot be confirmed), reads the actual size and content type back from
  * storage, and persists a {@code venue_assets} row with the taxonomy fields from the request.
  *
- * <p>Object keys embed the tenant key and venue id so confirm can validate ownership by exact match
- * against the key that would be generated for the asset id and the active tenant — the client
- * cannot confirm an object it does not own.
+ * <p>Object keys embed the tenant key and, when present, the venue id so confirm can validate
+ * ownership by exact match against the key that would be generated for the asset id and the active
+ * tenant — the client cannot confirm an object it does not own. A venue-less import key omits the
+ * venue segment.
+ *
+ * <p>Confirm publishes a {@link VenueAssetUploadedEvent}; the listener in
+ * {@code infrastructure.messaging} forwards it to RabbitMQ after the transaction commits, so the
+ * processing worker never reads the asset before its row is visible.
  */
 @Service
 @Transactional
@@ -72,24 +78,29 @@ public class VenueAssetServiceImpl implements VenueAssetService {
   private final MinioClient minioClient;
   private final MinioClient presigningMinioClient;
   private final ObjectStorageConfigurationProperties storageProps;
+  private final ApplicationEventPublisher eventPublisher;
 
   public VenueAssetServiceImpl(final VenueMapper venueMapper,
                                final VenueAssetMapper assetMapper,
                                final MinioClient minioClient,
                                @Qualifier("presigningMinioClient") final MinioClient presigningMinioClient,
-                               final ObjectStorageConfigurationProperties storageProps) {
+                               final ObjectStorageConfigurationProperties storageProps,
+                               final ApplicationEventPublisher eventPublisher) {
     this.venueMapper = venueMapper;
     this.assetMapper = assetMapper;
     this.minioClient = minioClient;
     this.presigningMinioClient = presigningMinioClient;
     this.storageProps = storageProps;
+    this.eventPublisher = eventPublisher;
   }
 
   @Override
   public VenueAssetDtos.InitiateAssetUploadResponse initiateUpload(final UUID venueId,
                                                                    final VenueAssetDtos.InitiateAssetUploadRequest request,
                                                                    final UUID uploadedBy) {
-    requireVenue(venueId);
+    if (venueId != null) {
+      requireVenue(venueId);
+    }
     validateUploadPolicy(request.contentType(), request.sizeBytes());
     final UUID assetId = UUID.randomUUID();
     final String tenantKey = TenantContext.getCurrentTenant();
@@ -102,10 +113,18 @@ public class VenueAssetServiceImpl implements VenueAssetService {
   }
 
   @Override
+  public VenueAssetDtos.InitiateAssetUploadResponse initiateUpload(final VenueAssetDtos.InitiateAssetUploadRequest request,
+                                                                   final UUID uploadedBy) {
+    return initiateUpload(null, request, uploadedBy);
+  }
+
+  @Override
   public VenueAssetDtos.VenueAssetResponse confirmUpload(final UUID venueId, final UUID assetId,
                                                          final VenueAssetDtos.ConfirmAssetUploadRequest request,
                                                          final UUID uploadedBy) {
-    requireVenue(venueId);
+    if (venueId != null) {
+      requireVenue(venueId);
+    }
     final String tenantKey = TenantContext.getCurrentTenant();
     final String expectedKey = buildObjectKey(tenantKey, venueId, assetId, request.fileName());
     if (!expectedKey.equals(request.objectKey())) {
@@ -129,6 +148,7 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     asset.setSizeBytes(stat.size());
     asset.setS3Key(request.objectKey());
     asset.setUploadedBy(uploadedBy);
+    asset.setStatus(VenueAsset.STATUS_UPLOADED);
     assetMapper.insert(asset);
 
     // Re-read so created_at / updated_at reflect the database-computed values.
@@ -136,16 +156,27 @@ public class VenueAssetServiceImpl implements VenueAssetService {
         .orElseThrow(() -> new IllegalStateException("Inserted venue asset not found: " + assetId));
 
     // Set primary_photo_url on the venue when this is the first confirmed PHOTO asset.
-    if ("PHOTO".equalsIgnoreCase(saved.getAssetType())) {
+    if (venueId != null && "PHOTO".equalsIgnoreCase(saved.getAssetType())) {
       final long photoCount = assetMapper.findPhotosByVenueId(venueId).size();
       if (photoCount == 1) {
         final String photoUrl = generatePresignedGetUrl(saved.getS3Key());
         venueMapper.updatePrimaryPhotoUrl(venueId, photoUrl);
       }
     }
+    // Queued for the processing worker after this transaction commits.
+    eventPublisher.publishEvent(new VenueAssetUploadedEvent(
+        tenantKey, assetId, venueId, saved.getAssetType(), saved.getContentType(),
+        saved.getFileName(), saved.getS3Key()));
     log.info("Venue asset confirmed: assetId={}, venueId={}, tenantKey={}, size={}",
         assetId, venueId, tenantKey, stat.size());
     return VenueAssetDtoMapper.toResponse(saved);
+  }
+
+  @Override
+  public VenueAssetDtos.VenueAssetResponse confirmUpload(final UUID assetId,
+                                                         final VenueAssetDtos.ConfirmAssetUploadRequest request,
+                                                         final UUID uploadedBy) {
+    return confirmUpload(null, assetId, request, uploadedBy);
   }
 
   @Override
@@ -184,6 +215,14 @@ public class VenueAssetServiceImpl implements VenueAssetService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public VenueAssetDtos.VenueAssetResponse getAssetById(final UUID assetId) {
+    final VenueAsset asset = assetMapper.findById(assetId)
+        .orElseThrow(() -> new VenueAssetNotFoundException(assetId));
+    return VenueAssetDtoMapper.toResponse(asset);
+  }
+
+  @Override
   public void deleteAsset(final UUID venueId, final UUID assetId) {
     requireVenue(venueId);
     final VenueAsset asset = assetMapper.findById(assetId)
@@ -217,7 +256,9 @@ public class VenueAssetServiceImpl implements VenueAssetService {
 
   private String buildObjectKey(final String tenantKey, final UUID venueId, final UUID assetId,
                                 final String fileName) {
-    return OBJECT_KEY_PREFIX + tenantKey + "/venues/" + venueId + OBJECT_KEY_SEGMENT + assetId
+    // A venue-less import has no venue segment — the venue does not exist until the worker derives it.
+    final String venueSegment = venueId == null ? "" : "/venues/" + venueId;
+    return OBJECT_KEY_PREFIX + tenantKey + venueSegment + OBJECT_KEY_SEGMENT + assetId
         + "/" + sanitizeFileName(fileName);
   }
 

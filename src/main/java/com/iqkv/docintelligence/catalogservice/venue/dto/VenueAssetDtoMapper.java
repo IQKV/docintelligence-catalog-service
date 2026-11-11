@@ -40,6 +40,8 @@ public final class VenueAssetDtoMapper {
         asset.getSizeBytes(),
         asset.getS3Key(),
         asset.getUploadedBy(),
+        asset.getStatus(),
+        asset.getFailureReason(),
         asset.getCreatedAt(),
         asset.getUpdatedAt());
   }

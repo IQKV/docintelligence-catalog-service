@@ -74,7 +74,8 @@ public final class VenueAssetDtos {
 
   /**
    * Tenant-facing view of one venue asset. The stored object key is exposed so a caller can
-   * resolve the object.
+   * resolve the object. {@code status} reports where the asset sits in the processing pipeline and
+   * {@code failureReason} carries the cause when it is {@code FAILED}.
    */
   public record VenueAssetResponse(
       UUID id,
@@ -88,6 +89,8 @@ public final class VenueAssetDtos {
       Long sizeBytes,
       String s3Key,
       UUID uploadedBy,
+      String status,
+      String failureReason,
       Instant createdAt,
       Instant updatedAt) {
   }

@@ -48,6 +48,8 @@ public class RabbitMQConfig {
   // -------------------------------------------------------------------------
   public static final String ROUTING_TENANT_CREATED = "tenant.created";
   public static final String ROUTING_TENANT_UPDATED = "tenant.updated";
+  /** Published when a venue asset upload is confirmed; consumed by the processing worker. */
+  public static final String ROUTING_VENUE_ASSET_UPLOADED = "venue.asset.uploaded";
 
   private static final long TTL_24H_MS = 86_400_000L;
 

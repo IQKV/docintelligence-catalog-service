@@ -29,10 +29,12 @@ import com.iqkv.docintelligence.catalogservice.venue.dto.VenueAssetDtos;
  * persists a {@code venue_assets} row. List, photos and detail reads are tenant-scoped (the active
  * tenant schema isolates rows).
  *
- * <p>Every method takes the owning venue id from the request path and throws
- * {@link VenueNotFoundException} when that venue does not exist. {@link #getAsset} additionally
- * throws {@link VenueAssetNotFoundException} when the asset does not exist or is not owned by the
- * named venue.
+ * <p>The owning venue is optional. The venue-scoped overloads take it from the request path and
+ * throw {@link VenueNotFoundException} when that venue does not exist; the venue-less overloads are
+ * the import flow — a document is uploaded first and {@code docintelligence-catalog-processing-worker}
+ * derives the venue from it, so the confirmed row starts with {@code venueId == null} and status
+ * {@code UPLOADED}. {@link #getAsset} additionally throws {@link VenueAssetNotFoundException} when
+ * the asset does not exist or is not owned by the named venue.
  */
 public interface VenueAssetService {
 
@@ -40,7 +42,22 @@ public interface VenueAssetService {
                                                             VenueAssetDtos.InitiateAssetUploadRequest request,
                                                             UUID uploadedBy);
 
+  /**
+   * Venue-less variant of {@link #initiateUpload} for the import flow — the object key omits the
+   * venue segment because no venue exists yet.
+   */
+  VenueAssetDtos.InitiateAssetUploadResponse initiateUpload(VenueAssetDtos.InitiateAssetUploadRequest request,
+                                                            UUID uploadedBy);
+
   VenueAssetDtos.VenueAssetResponse confirmUpload(UUID venueId, UUID assetId,
+                                                  VenueAssetDtos.ConfirmAssetUploadRequest request,
+                                                  UUID uploadedBy);
+
+  /**
+   * Venue-less variant of {@link #confirmUpload} for the import flow — the persisted row has a
+   * {@code null} {@code venueId} and is queued for the processing worker.
+   */
+  VenueAssetDtos.VenueAssetResponse confirmUpload(UUID assetId,
                                                   VenueAssetDtos.ConfirmAssetUploadRequest request,
                                                   UUID uploadedBy);
 
@@ -51,6 +68,13 @@ public interface VenueAssetService {
   VenueAssetDtos.VenueAssetPublicListResponse listPhotosPublic(UUID venueId);
 
   VenueAssetDtos.VenueAssetResponse getAsset(UUID venueId, UUID assetId);
+
+  /**
+   * Reads one asset by id alone, without requiring a venue — the import flow polls this to watch
+   * the asset move from {@code UPLOADED} to {@code EXTRACTED}. Throws
+   * {@link VenueAssetNotFoundException} when the asset does not exist.
+   */
+  VenueAssetDtos.VenueAssetResponse getAssetById(UUID assetId);
 
   void deleteAsset(UUID venueId, UUID assetId);
 }

@@ -16,5 +16,6 @@
     <include file="db/changelog/tenant/20261109150000-create-venue-assets.xml"/>
     <include file="db/changelog/tenant/20261109150001-add-venue-primary-photo-url.xml"/>
     <include file="db/changelog/tenant/20261109150002-drop-venue-documents.xml"/>
+    <include file="db/changelog/tenant/20261111120000-alter-venue-assets-optional-venue-and-status.xml"/>
 
 </databaseChangeLog>
