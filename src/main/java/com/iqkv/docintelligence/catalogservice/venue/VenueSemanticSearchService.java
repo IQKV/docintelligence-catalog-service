@@ -65,7 +65,7 @@ class VenueSemanticSearchService {
 
   private static final String SEARCH_SELECT = """
       SELECT id, name, address, city, location_lat, location_lng,
-             primary_photo_url, metadata, confidence, source, master_venue_id,
+             metadata, confidence, source, master_venue_id,
              created_at, updated_at,
              1 - (embedding <=> ?::vector) AS similarity
       FROM %s
@@ -94,12 +94,16 @@ class VenueSemanticSearchService {
 
   private final VenueQueryPlanner queryPlanner;
 
+  private final VenueAssetService venueAssetService;
+
   VenueSemanticSearchService(final JdbcTemplate jdbcTemplate,
                              final EmbeddingModel embeddingModel,
-                             final VenueQueryPlanner queryPlanner) {
+                             final VenueQueryPlanner queryPlanner,
+                             final VenueAssetService venueAssetService) {
     this.jdbcTemplate = jdbcTemplate;
     this.embeddingModel = embeddingModel;
     this.queryPlanner = queryPlanner;
+    this.venueAssetService = venueAssetService;
   }
 
   /**
@@ -151,15 +155,16 @@ class VenueSemanticSearchService {
         searchSelect + filter.sql() + SEARCH_ORDER,
         ps -> bindAll(ps, binders),
         (rs, rowNum) -> {
+          final UUID id = UUID.fromString(rs.getString("id"));
           final String masterVenueId = rs.getString("master_venue_id");
           return new VenueDtos.VenueSemanticSearchResult(
-              UUID.fromString(rs.getString("id")),
+              id,
               rs.getString("name"),
               rs.getString("address"),
               rs.getString("city"),
               rs.getBigDecimal("location_lat"),
               rs.getBigDecimal("location_lng"),
-              rs.getString("primary_photo_url"),
+              venueAssetService.resolvePrimaryPhotoUrl(id),
               rs.getString("metadata"),
               rs.getBigDecimal("confidence"),
               rs.getString("source"),

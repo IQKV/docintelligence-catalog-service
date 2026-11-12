@@ -42,9 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code created_at} / {@code updated_at} reflect the database-computed values, mirroring the
  * master venue service.
  *
- * <p>The venue list and the tenant venue detail self-heal a missing {@code primaryPhotoUrl} via
- * {@link VenueAssetService#syncPrimaryPhoto(java.util.UUID)}, so a venue whose photo arrived
- * without passing the venue-scoped confirm path still renders its thumbnail.
+ * <p>The list, detail and semantic-search projections resolve {@code primaryPhotoUrl} at read
+ * time through {@link VenueAssetService#resolvePrimaryPhotoUrl(java.util.UUID)} — a presigned URL
+ * is time-limited and cannot be stored on the row.
  */
 @Service
 @Transactional
@@ -73,9 +73,8 @@ public class VenueServiceImpl implements VenueService {
                                                   final String sortBy, final String sortDir,
                                                   final int limit, final int offset) {
     final var venues = venueMapper.search(search, city, sortBy, sortDir, limit, offset);
-    venues.forEach(this::fillPrimaryPhoto);
     return new VenueDtos.VenueListResponse(
-        venues.stream().map(VenueDtoMapper::toSummaryView).toList(),
+        venues.stream().map(this::toSummaryView).toList(),
         venueMapper.countSearch(search, city));
   }
 
@@ -122,8 +121,7 @@ public class VenueServiceImpl implements VenueService {
   @Transactional(readOnly = true)
   public VenueDtos.VenuePublicResponse getPublicVenue(final UUID id) {
     final Venue venue = requireVenue(id);
-    fillPrimaryPhoto(venue);
-    return VenueDtoMapper.toPublicResponse(venue);
+    return toPublicResponse(venue);
   }
 
   @Override
@@ -135,7 +133,7 @@ public class VenueServiceImpl implements VenueService {
     venue.setSource("tenant");
     venueMapper.insert(venue);
     embeddingService.embed(venue);
-    return VenueDtoMapper.toPublicResponse(requireVenue(venue.getId()));
+    return toPublicResponse(requireVenue(venue.getId()));
   }
 
   @Override
@@ -145,7 +143,7 @@ public class VenueServiceImpl implements VenueService {
     VenueDtoMapper.applyPublicWrite(venue, request);
     venueMapper.update(venue);
     embeddingService.embed(venue);
-    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+    return toPublicResponse(requireVenue(id));
   }
 
   @Override
@@ -155,7 +153,7 @@ public class VenueServiceImpl implements VenueService {
     VenueDtoMapper.applyPublicPatch(venue, request);
     venueMapper.update(venue);
     embeddingService.embed(venue);
-    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+    return toPublicResponse(requireVenue(id));
   }
 
   @Override
@@ -164,7 +162,7 @@ public class VenueServiceImpl implements VenueService {
     venue.setMetadata(metadata);
     venueMapper.update(venue);
     embeddingService.embed(venue);
-    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+    return toPublicResponse(requireVenue(id));
   }
 
   @Override
@@ -216,14 +214,18 @@ public class VenueServiceImpl implements VenueService {
   }
 
   /**
-   * Fills the denormalised {@code primaryPhotoUrl} from the venue's first photo asset when the
-   * column is empty, so list and detail views render the photo even when it reached the venue
-   * without passing the venue-scoped confirm path. The asset service persists the value, so this
-   * is a one-off self-heal rather than a per-request lookup.
+   * Projects a venue to the list-item view, resolving its time-limited primary photo URL at read
+   * time.
    */
-  private void fillPrimaryPhoto(final Venue venue) {
-    if (venue.getPrimaryPhotoUrl() == null) {
-      venue.setPrimaryPhotoUrl(venueAssetService.syncPrimaryPhoto(venue.getId()));
-    }
+  private VenueDtos.VenueSummaryView toSummaryView(final Venue venue) {
+    return VenueDtoMapper.toSummaryView(venue, venueAssetService.resolvePrimaryPhotoUrl(venue.getId()));
+  }
+
+  /**
+   * Projects a venue to the tenant safe view, resolving its time-limited primary photo URL at
+   * read time.
+   */
+  private VenueDtos.VenuePublicResponse toPublicResponse(final Venue venue) {
+    return VenueDtoMapper.toPublicResponse(venue, venueAssetService.resolvePrimaryPhotoUrl(venue.getId()));
   }
 }

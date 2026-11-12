@@ -75,13 +75,13 @@ class VenueServiceImplTest {
   }
 
   @Test
-  @DisplayName("searchVenues backfills a missing primary photo from the venue's photo assets")
-  void searchBackfillsMissingPrimaryPhoto() {
+  @DisplayName("searchVenues resolves the primary photo from the venue's photo assets")
+  void searchResolvesPrimaryPhoto() {
     final UUID id = UUID.randomUUID();
     when(venueMapper.search("grand", "Paris", "name", "asc", 20, 0))
         .thenReturn(List.of(savedVenue(id, "Grand Hall")));
     when(venueMapper.countSearch("grand", "Paris")).thenReturn(1L);
-    when(venueAssetService.syncPrimaryPhoto(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
+    when(venueAssetService.resolvePrimaryPhotoUrl(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
 
     final var response = service.searchVenues("grand", "Paris", "name", "asc", 20, 0);
 
@@ -89,26 +89,24 @@ class VenueServiceImplTest {
   }
 
   @Test
-  @DisplayName("searchVenues keeps an existing primary photo and does not consult the asset service")
-  void searchKeepsExistingPrimaryPhoto() {
+  @DisplayName("searchVenues returns a null primary photo when the venue has no photo")
+  void searchWithoutPhotoReturnsNullPrimaryPhoto() {
     final UUID id = UUID.randomUUID();
-    final Venue venue = savedVenue(id, "Grand Hall");
-    venue.setPrimaryPhotoUrl("https://cdn.example.com/existing.jpg");
-    when(venueMapper.search("grand", "Paris", "name", "asc", 20, 0)).thenReturn(List.of(venue));
+    when(venueMapper.search("grand", "Paris", "name", "asc", 20, 0))
+        .thenReturn(List.of(savedVenue(id, "Grand Hall")));
     when(venueMapper.countSearch("grand", "Paris")).thenReturn(1L);
 
     final var response = service.searchVenues("grand", "Paris", "name", "asc", 20, 0);
 
-    assertThat(response.items().get(0).primaryPhotoUrl()).isEqualTo("https://cdn.example.com/existing.jpg");
-    verify(venueAssetService, never()).syncPrimaryPhoto(any(UUID.class));
+    assertThat(response.items().get(0).primaryPhotoUrl()).isNull();
   }
 
   @Test
-  @DisplayName("getPublicVenue backfills a missing primary photo from the venue's photo assets")
-  void getPublicVenueBackfillsMissingPrimaryPhoto() {
+  @DisplayName("getPublicVenue resolves the primary photo from the venue's photo assets")
+  void getPublicVenueResolvesPrimaryPhoto() {
     final UUID id = UUID.randomUUID();
     when(venueMapper.findById(id)).thenReturn(Optional.of(savedVenue(id, "Grand Hall")));
-    when(venueAssetService.syncPrimaryPhoto(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
+    when(venueAssetService.resolvePrimaryPhotoUrl(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
 
     final var response = service.getPublicVenue(id);
 

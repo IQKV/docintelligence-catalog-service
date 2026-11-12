@@ -58,17 +58,17 @@ public final class VenueDtoMapper {
   }
 
   /**
-   * List-item projection — narrower than {@link #toResponse(Venue)}, but keeps the denormalised
-   * {@code primaryPhotoUrl} so lists and thumbnails can render the venue photo.
+   * List-item projection — narrower than {@link #toResponse(Venue)}; carries the resolved,
+   * time-limited {@code primaryPhotoUrl} so lists and thumbnails can render the venue photo.
    */
-  public static VenueDtos.VenueSummaryView toSummaryView(final Venue venue) {
+  public static VenueDtos.VenueSummaryView toSummaryView(final Venue venue, final String primaryPhotoUrl) {
     return new VenueDtos.VenueSummaryView(
         venue.getId(),
         venue.getName(),
         venue.getCity(),
         venue.getLocationLat(),
         venue.getLocationLng(),
-        venue.getPrimaryPhotoUrl(),
+        primaryPhotoUrl,
         venue.getMasterVenueId(),
         venue.getCreatedAt(),
         venue.getUpdatedAt());
@@ -139,9 +139,9 @@ public final class VenueDtoMapper {
   /**
    * Builds the tenant-facing safe projection — curation fields ({@code metadata},
    * {@code confidence}, {@code source}) are dropped; the optional {@code masterVenueId}
-   * relation key and the denormalised {@code primaryPhotoUrl} are kept.
+   * relation key and the resolved, time-limited {@code primaryPhotoUrl} are kept.
    */
-  public static VenueDtos.VenuePublicResponse toPublicResponse(final Venue venue) {
+  public static VenueDtos.VenuePublicResponse toPublicResponse(final Venue venue, final String primaryPhotoUrl) {
     return new VenueDtos.VenuePublicResponse(
         venue.getId(),
         venue.getName(),
@@ -149,7 +149,7 @@ public final class VenueDtoMapper {
         venue.getCity(),
         venue.getLocationLat(),
         venue.getLocationLng(),
-        venue.getPrimaryPhotoUrl(),
+        primaryPhotoUrl,
         venue.getMetadata(),
         venue.getMasterVenueId(),
         venue.getCreatedAt(),
@@ -158,8 +158,9 @@ public final class VenueDtoMapper {
 
   /**
    * Narrows an admin semantic result to the tenant safe projection — curation fields
-   * ({@code metadata}, {@code confidence}, {@code source}) are dropped; the denormalised
-   * {@code primaryPhotoUrl} and the optional {@code masterVenueId} relation key are kept.
+   * ({@code metadata}, {@code confidence}, {@code source}) are dropped; the resolved,
+   * time-limited {@code primaryPhotoUrl} and the optional {@code masterVenueId} relation key
+   * are kept.
    */
   public static VenueDtos.VenuePublicSemanticSearchResult toPublicSemanticResult(
       final VenueDtos.VenueSemanticSearchResult result) {

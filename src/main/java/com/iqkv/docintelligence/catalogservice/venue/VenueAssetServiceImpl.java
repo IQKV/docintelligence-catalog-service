@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -156,14 +155,6 @@ public class VenueAssetServiceImpl implements VenueAssetService {
     final VenueAsset saved = assetMapper.findById(assetId)
         .orElseThrow(() -> new IllegalStateException("Inserted venue asset not found: " + assetId));
 
-    // Set primary_photo_url on the venue when this is the first confirmed PHOTO asset.
-    if (venueId != null && "PHOTO".equalsIgnoreCase(saved.getAssetType())) {
-      final long photoCount = assetMapper.findPhotosByVenueId(venueId).size();
-      if (photoCount == 1) {
-        final String photoUrl = generatePresignedGetUrl(saved.getS3Key());
-        venueMapper.updatePrimaryPhotoUrl(venueId, photoUrl);
-      }
-    }
     // Queued for the processing worker after this transaction commits.
     eventPublisher.publishEvent(new VenueAssetUploadedEvent(
         tenantKey, assetId, venueId, saved.getAssetType(), saved.getContentType(),
@@ -206,27 +197,13 @@ public class VenueAssetServiceImpl implements VenueAssetService {
   }
 
   @Override
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public String syncPrimaryPhoto(final UUID venueId) {
-    final Venue venue = venueMapper.findById(venueId).orElse(null);
-    if (venue == null) {
-      return null;
-    }
-    if (venue.getPrimaryPhotoUrl() != null) {
-      return venue.getPrimaryPhotoUrl();
-    }
+  @Transactional(readOnly = true)
+  public String resolvePrimaryPhotoUrl(final UUID venueId) {
     final List<VenueAsset> photos = assetMapper.findPhotosByVenueId(venueId);
     if (photos.isEmpty()) {
       return null;
     }
-    final String photoUrl = generatePresignedGetUrlSafe(photos.get(0).getS3Key());
-    if (photoUrl == null) {
-      return null;
-    }
-    venueMapper.updatePrimaryPhotoUrl(venueId, photoUrl);
-    log.info("Backfilled venue primary photo: venueId={}, tenantKey={}", venueId,
-        TenantContext.getCurrentTenant());
-    return photoUrl;
+    return generatePresignedGetUrlSafe(photos.get(0).getS3Key());
   }
 
   @Override

@@ -349,53 +349,31 @@ class VenueAssetServiceImplTest {
   }
 
   @Test
-  @DisplayName("syncPrimaryPhoto backfills the column from the first photo asset")
-  void syncPrimaryPhotoBackfillsFromFirstPhoto() throws Exception {
-    stubVenue();
+  @DisplayName("resolvePrimaryPhotoUrl presigns the venue's first photo")
+  void resolvePrimaryPhotoUrlPresignsFirstPhoto() throws Exception {
     when(assetMapper.findPhotosByVenueId(VENUE_ID)).thenReturn(List.of(asset(UUID.randomUUID(), VENUE_ID)));
     when(presigningMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
         .thenReturn("http://presigned-url");
 
-    final String url = service.syncPrimaryPhoto(VENUE_ID);
-
-    assertThat(url).isEqualTo("http://presigned-url");
-    verify(venueMapper).updatePrimaryPhotoUrl(VENUE_ID, "http://presigned-url");
+    assertThat(service.resolvePrimaryPhotoUrl(VENUE_ID)).isEqualTo("http://presigned-url");
   }
 
   @Test
-  @DisplayName("syncPrimaryPhoto keeps an existing photo URL and touches neither storage nor the row")
-  void syncPrimaryPhotoKeepsExistingUrl() throws Exception {
-    final Venue venue = new Venue();
-    venue.setId(VENUE_ID);
-    venue.setPrimaryPhotoUrl("http://existing-url");
-    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.of(venue));
-
-    final String url = service.syncPrimaryPhoto(VENUE_ID);
-
-    assertThat(url).isEqualTo("http://existing-url");
-    verify(assetMapper, never()).findPhotosByVenueId(any(UUID.class));
-    verify(presigningMinioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
-    verify(venueMapper, never()).updatePrimaryPhotoUrl(any(UUID.class), any());
-  }
-
-  @Test
-  @DisplayName("syncPrimaryPhoto persists nothing when the venue has no photo")
-  void syncPrimaryPhotoNoPhotoIsNoOp() {
-    stubVenue();
+  @DisplayName("resolvePrimaryPhotoUrl returns null when the venue has no photo")
+  void resolvePrimaryPhotoUrlNoPhotoReturnsNull() {
     when(assetMapper.findPhotosByVenueId(VENUE_ID)).thenReturn(List.of());
 
-    final String url = service.syncPrimaryPhoto(VENUE_ID);
-
-    assertThat(url).isNull();
-    verify(venueMapper, never()).updatePrimaryPhotoUrl(any(UUID.class), any());
+    assertThat(service.resolvePrimaryPhotoUrl(VENUE_ID)).isNull();
   }
 
   @Test
-  @DisplayName("syncPrimaryPhoto returns null when the venue does not exist")
-  void syncPrimaryPhotoMissingVenueReturnsNull() {
-    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.empty());
+  @DisplayName("resolvePrimaryPhotoUrl returns null when presigning the photo fails")
+  void resolvePrimaryPhotoUrlPresignFailureReturnsNull() throws Exception {
+    when(assetMapper.findPhotosByVenueId(VENUE_ID)).thenReturn(List.of(asset(UUID.randomUUID(), VENUE_ID)));
+    when(presigningMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+        .thenThrow(new RuntimeException("storage unavailable"));
 
-    assertThat(service.syncPrimaryPhoto(VENUE_ID)).isNull();
+    assertThat(service.resolvePrimaryPhotoUrl(VENUE_ID)).isNull();
   }
 
   private void verifyNoStorageOrPersistence() throws Exception {

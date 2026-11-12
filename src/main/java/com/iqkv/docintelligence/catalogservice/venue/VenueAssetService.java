@@ -68,17 +68,14 @@ public interface VenueAssetService {
   VenueAssetDtos.VenueAssetPublicListResponse listPhotosPublic(UUID venueId);
 
   /**
-   * Populates the venue's denormalised {@code primary_photo_url} when it is empty but the venue
-   * already has at least one PHOTO asset — a self-heal for photos that reached a venue without
-   * passing the venue-scoped confirm path (for example a venue-less import the processing worker
-   * later linked). Mints a presigned GET URL for the first photo (by display order) and stores it,
-   * so subsequent reads return it from the column. A no-op when the venue already has a URL or has
-   * no photo.
+   * Resolves a fresh presigned GET URL for the venue's primary photo — the first PHOTO asset by
+   * display order. Resolved at read time because a presigned URL is time-limited and cannot be
+   * persisted; returns {@code null} when the venue has no photo.
    *
-   * @param venueId the venue to reconcile
-   * @return the effective primary photo URL, or {@code null} when the venue has no photo
+   * @param venueId the venue to resolve the primary photo for
+   * @return a presigned GET URL for the first photo, or {@code null} when the venue has no photo
    */
-  String syncPrimaryPhoto(UUID venueId);
+  String resolvePrimaryPhotoUrl(UUID venueId);
 
   VenueAssetDtos.VenueAssetResponse getAsset(UUID venueId, UUID assetId);
 

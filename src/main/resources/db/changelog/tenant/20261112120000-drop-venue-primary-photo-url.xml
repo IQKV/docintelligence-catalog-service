@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Drops the denormalised primary_photo_url: it stored a presigned GET URL that expires after
+         60 minutes, so a persisted value could never stay valid. The URL is now derived at read
+         time from the venue's first photo asset. Lives in the t_{tenantKey} schema (search_path is
+         set by TenantLiquibaseRunner before these changesets run, so no schemaName is set). -->
+
+    <changeSet id="20261112120000-drop-venue-primary-photo-url" author="iqkv">
+
+        <dropColumn tableName="venues" columnName="primary_photo_url"/>
+
+        <rollback>
+            <addColumn tableName="venues">
+                <column name="primary_photo_url" type="TEXT"/>
+            </addColumn>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>
