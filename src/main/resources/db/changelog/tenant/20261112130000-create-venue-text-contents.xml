@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Tenant venue text content — raw or markdown text chunks derived from source documents
+         (PDF decks, notebooks, CSVs, etc.) and associated with a tenant venue for semantic
+         analysis.
+
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before
+         these changesets run, so no schemaName is set on the statements below).
+
+         venue_id is nullable: a document is uploaded and processed before the venue record is
+         derived, so a row may exist without a venue until the processing worker links it.
+
+         source_asset_id is an optional app-level reference to the venue_assets row the text was
+         extracted from. No DB-level FK — the asset may be deleted independently.
+
+         embedding (vector(768)) supports semantic / cosine-distance search over the content.
+         NULL until the embedding pipeline runs; excluded from vector search, still full-text
+         searchable. -->
+
+    <changeSet id="20261112130000-create-venue-text-contents" author="iqkv">
+
+        <createTable tableName="venue_text_contents">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <!-- Optional app-level FK to t_{tenantKey}.venues. No DB-level FK because the row
+                 may be created before the venue exists. NULL until linked by the worker. -->
+            <column name="venue_id" type="UUID"/>
+            <!-- Optional app-level reference to the venue_assets row this text was extracted
+                 from. No DB-level FK — the asset may be deleted independently. -->
+            <column name="source_asset_id" type="UUID"/>
+            <!-- Raw or markdown text extracted from the source document. -->
+            <column name="content" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="venue_text_contents" indexName="idx_vtc_venue_id">
+            <column name="venue_id"/>
+        </createIndex>
+        <createIndex tableName="venue_text_contents" indexName="idx_vtc_source_asset_id">
+            <column name="source_asset_id"/>
+        </createIndex>
+
+        <!-- pgvector column for semantic / cosine-distance search over content.
+             Dimension 768 matches nomic-embed-text; change if the model changes.
+             NULL = not yet embedded — excluded from vector search, still keyword-searchable. -->
+        <sql>ALTER TABLE venue_text_contents ADD COLUMN IF NOT EXISTS embedding vector(768)</sql>
+
+        <!-- HNSW index for fast approximate nearest-neighbour with cosine distance.
+             m=16 / ef_construction=64 are conservative defaults; tune for recall vs speed. -->
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_vtc_embedding_hnsw
+            ON venue_text_contents
+            USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_vtc_embedding_hnsw</sql>
+            <sql>ALTER TABLE venue_text_contents DROP COLUMN IF EXISTS embedding</sql>
+            <dropIndex tableName="venue_text_contents" indexName="idx_vtc_source_asset_id"/>
+            <dropIndex tableName="venue_text_contents" indexName="idx_vtc_venue_id"/>
+            <dropTable tableName="venue_text_contents"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>
