@@ -16,6 +16,10 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
+import jakarta.validation.Valid;
+import java.util.UUID;
+
+import com.iqkv.docintelligence.catalogservice.venue.dto.VenueTextContentDtos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -25,10 +29,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import java.util.UUID;
-
-import com.iqkv.docintelligence.catalogservice.venue.dto.VenueTextContentDtos;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
