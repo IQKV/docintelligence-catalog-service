@@ -70,6 +70,14 @@ public interface VenueAssetService {
   VenueAssetDtos.VenueAssetResponse getAsset(UUID venueId, UUID assetId);
 
   /**
+   * Mints a presigned GET URL for the stored object of one venue-owned asset, so the caller can
+   * render it inline (images and PDFs alike). Throws {@link VenueNotFoundException} when the venue
+   * does not exist and {@link VenueAssetNotFoundException} when the asset does not exist or is not
+   * owned by the named venue.
+   */
+  VenueAssetDtos.VenueAssetPreviewUrlResponse getPreviewUrl(UUID venueId, UUID assetId);
+
+  /**
    * Reads one asset by id alone, without requiring a venue — the import flow polls this to watch
    * the asset move from {@code UPLOADED} to {@code EXTRACTED}. Throws
    * {@link VenueAssetNotFoundException} when the asset does not exist.

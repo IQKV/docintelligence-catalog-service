@@ -182,6 +182,28 @@ public class VenueAssetRestResource {
     return ResponseEntity.ok(venueAssetService.getAsset(venueId, id));
   }
 
+  @GetMapping("/{id}/preview-url")
+  @Operation(
+      summary = "Get a presigned preview URL for a venue asset",
+      description = "Mints a short-lived presigned GET URL for the stored object so the browser "
+                    + "can render it inline — images and PDFs alike. Responds 404 when the venue "
+                    + "does not exist, or when the asset does not exist or is not owned by that venue.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Presigned preview URL generated",
+                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetPreviewUrlResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue or asset not found", content = @Content)
+  })
+  public ResponseEntity<VenueAssetDtos.VenueAssetPreviewUrlResponse> previewUrl(
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId,
+      @Parameter(description = "Asset UUID") @PathVariable final UUID id) {
+    return ResponseEntity.ok(venueAssetService.getPreviewUrl(venueId, id));
+  }
+
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
   @Operation(

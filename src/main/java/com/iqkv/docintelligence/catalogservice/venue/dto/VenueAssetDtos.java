@@ -130,4 +130,17 @@ public final class VenueAssetDtos {
    */
   public record VenueAssetPublicListResponse(List<VenueAssetPublicResponse> items, long totalElements) {
   }
+
+  /**
+   * Returned by the asset preview endpoint — a time-limited presigned GET URL for the stored
+   * object plus the content type it was uploaded as, so the browser can render it inline
+   * (images and PDFs alike) without resolving storage credentials.
+   */
+  public record VenueAssetPreviewUrlResponse(
+      UUID assetId,
+      String url,
+      String contentType,
+      String fileName,
+      int expiresInMinutes) {
+  }
 }

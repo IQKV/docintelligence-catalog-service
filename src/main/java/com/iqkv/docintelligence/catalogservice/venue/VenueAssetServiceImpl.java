@@ -216,6 +216,21 @@ public class VenueAssetServiceImpl implements VenueAssetService {
 
   @Override
   @Transactional(readOnly = true)
+  public VenueAssetDtos.VenueAssetPreviewUrlResponse getPreviewUrl(final UUID venueId, final UUID assetId) {
+    requireVenue(venueId);
+    final VenueAsset asset = assetMapper.findById(assetId)
+        .filter(found -> venueId.equals(found.getVenueId()))
+        .orElseThrow(() -> new VenueAssetNotFoundException(assetId));
+    return new VenueAssetDtos.VenueAssetPreviewUrlResponse(
+        asset.getId(),
+        generatePresignedGetUrl(asset.getS3Key()),
+        asset.getContentType(),
+        asset.getFileName(),
+        storageProps.upload().presignedUrlExpirationMinutes());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public VenueAssetDtos.VenueAssetResponse getAssetById(final UUID assetId) {
     final VenueAsset asset = assetMapper.findById(assetId)
         .orElseThrow(() -> new VenueAssetNotFoundException(assetId));

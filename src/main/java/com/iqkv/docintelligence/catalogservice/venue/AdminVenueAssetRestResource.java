@@ -197,6 +197,32 @@ public class AdminVenueAssetRestResource {
     }
   }
 
+  @GetMapping("/{id}/preview-url")
+  @Operation(
+      summary = "Get a presigned preview URL for a venue asset (platform admin)",
+      description = "Mints a short-lived presigned GET URL for the stored object of the tenant "
+                    + "named in the path so the browser can render it inline — images and PDFs "
+                    + "alike. Responds 404 when the venue does not exist, or when the asset does "
+                    + "not exist or is not owned by that venue.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Presigned preview URL generated",
+                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetPreviewUrlResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — PLATFORM_ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue or asset not found", content = @Content)
+  })
+  public ResponseEntity<VenueAssetDtos.VenueAssetPreviewUrlResponse> previewUrl(
+      @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId,
+      @Parameter(description = "Asset UUID") @PathVariable final UUID id) {
+    try {
+      TenantContext.setCurrentTenant(tenantKey);
+      return ResponseEntity.ok(venueAssetService.getPreviewUrl(venueId, id));
+    } finally {
+      TenantContext.clear();
+    }
+  }
+
   @DeleteMapping("/{id}")
   @Operation(
       summary = "Delete a venue asset (platform admin)",
