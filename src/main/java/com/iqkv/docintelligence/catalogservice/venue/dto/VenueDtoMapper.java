@@ -58,7 +58,8 @@ public final class VenueDtoMapper {
   }
 
   /**
-   * Admin list-item projection — narrower than {@link #toResponse(Venue)}.
+   * List-item projection — narrower than {@link #toResponse(Venue)}, but keeps the denormalised
+   * {@code primaryPhotoUrl} so lists and thumbnails can render the venue photo.
    */
   public static VenueDtos.VenueSummaryView toSummaryView(final Venue venue) {
     return new VenueDtos.VenueSummaryView(
@@ -67,6 +68,7 @@ public final class VenueDtoMapper {
         venue.getCity(),
         venue.getLocationLat(),
         venue.getLocationLng(),
+        venue.getPrimaryPhotoUrl(),
         venue.getMasterVenueId(),
         venue.getCreatedAt(),
         venue.getUpdatedAt());

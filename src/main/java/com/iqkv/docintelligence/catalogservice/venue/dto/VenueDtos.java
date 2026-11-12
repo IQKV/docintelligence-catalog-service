@@ -53,7 +53,8 @@ public final class VenueDtos {
   }
 
   /**
-   * Admin list item — a narrower projection than {@link VenueResponse}.
+   * List item — a narrower projection than {@link VenueResponse}, plus the denormalised
+   * {@code primaryPhotoUrl} so list and thumbnail views can render the venue photo.
    */
   public record VenueSummaryView(
       UUID id,
@@ -61,6 +62,7 @@ public final class VenueDtos {
       String city,
       BigDecimal locationLat,
       BigDecimal locationLng,
+      String primaryPhotoUrl,
       UUID masterVenueId,
       Instant createdAt,
       Instant updatedAt) {

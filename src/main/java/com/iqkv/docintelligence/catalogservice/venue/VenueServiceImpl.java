@@ -41,6 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
  * embedding is still {@code NULL}. After an insert or update the row is re-read so
  * {@code created_at} / {@code updated_at} reflect the database-computed values, mirroring the
  * master venue service.
+ *
+ * <p>The venue list and the tenant venue detail self-heal a missing {@code primaryPhotoUrl} via
+ * {@link VenueAssetService#syncPrimaryPhoto(java.util.UUID)}, so a venue whose photo arrived
+ * without passing the venue-scoped confirm path still renders its thumbnail.
  */
 @Service
 @Transactional
@@ -49,13 +53,16 @@ public class VenueServiceImpl implements VenueService {
   private static final Logger log = LoggerFactory.getLogger(VenueServiceImpl.class);
 
   private final VenueMapper venueMapper;
+  private final VenueAssetService venueAssetService;
   private final VenueEmbeddingService embeddingService;
   private final VenueSemanticSearchService semanticSearchService;
 
   public VenueServiceImpl(final VenueMapper venueMapper,
+                           final VenueAssetService venueAssetService,
                            final VenueEmbeddingService embeddingService,
                            final VenueSemanticSearchService semanticSearchService) {
     this.venueMapper = venueMapper;
+    this.venueAssetService = venueAssetService;
     this.embeddingService = embeddingService;
     this.semanticSearchService = semanticSearchService;
   }
@@ -66,6 +73,7 @@ public class VenueServiceImpl implements VenueService {
                                                   final String sortBy, final String sortDir,
                                                   final int limit, final int offset) {
     final var venues = venueMapper.search(search, city, sortBy, sortDir, limit, offset);
+    venues.forEach(this::fillPrimaryPhoto);
     return new VenueDtos.VenueListResponse(
         venues.stream().map(VenueDtoMapper::toSummaryView).toList(),
         venueMapper.countSearch(search, city));
@@ -113,7 +121,9 @@ public class VenueServiceImpl implements VenueService {
   @Override
   @Transactional(readOnly = true)
   public VenueDtos.VenuePublicResponse getPublicVenue(final UUID id) {
-    return VenueDtoMapper.toPublicResponse(requireVenue(id));
+    final Venue venue = requireVenue(id);
+    fillPrimaryPhoto(venue);
+    return VenueDtoMapper.toPublicResponse(venue);
   }
 
   @Override
@@ -203,5 +213,17 @@ public class VenueServiceImpl implements VenueService {
   private Venue requireVenue(final UUID id) {
     return venueMapper.findById(id)
         .orElseThrow(() -> new VenueNotFoundException(id));
+  }
+
+  /**
+   * Fills the denormalised {@code primaryPhotoUrl} from the venue's first photo asset when the
+   * column is empty, so list and detail views render the photo even when it reached the venue
+   * without passing the venue-scoped confirm path. The asset service persists the value, so this
+   * is a one-off self-heal rather than a per-request lookup.
+   */
+  private void fillPrimaryPhoto(final Venue venue) {
+    if (venue.getPrimaryPhotoUrl() == null) {
+      venue.setPrimaryPhotoUrl(venueAssetService.syncPrimaryPhoto(venue.getId()));
+    }
   }
 }

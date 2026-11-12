@@ -348,6 +348,56 @@ class VenueAssetServiceImplTest {
     assertThat(response.items().get(0).assetType()).isEqualTo("PHOTO");
   }
 
+  @Test
+  @DisplayName("syncPrimaryPhoto backfills the column from the first photo asset")
+  void syncPrimaryPhotoBackfillsFromFirstPhoto() throws Exception {
+    stubVenue();
+    when(assetMapper.findPhotosByVenueId(VENUE_ID)).thenReturn(List.of(asset(UUID.randomUUID(), VENUE_ID)));
+    when(presigningMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+        .thenReturn("http://presigned-url");
+
+    final String url = service.syncPrimaryPhoto(VENUE_ID);
+
+    assertThat(url).isEqualTo("http://presigned-url");
+    verify(venueMapper).updatePrimaryPhotoUrl(VENUE_ID, "http://presigned-url");
+  }
+
+  @Test
+  @DisplayName("syncPrimaryPhoto keeps an existing photo URL and touches neither storage nor the row")
+  void syncPrimaryPhotoKeepsExistingUrl() throws Exception {
+    final Venue venue = new Venue();
+    venue.setId(VENUE_ID);
+    venue.setPrimaryPhotoUrl("http://existing-url");
+    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.of(venue));
+
+    final String url = service.syncPrimaryPhoto(VENUE_ID);
+
+    assertThat(url).isEqualTo("http://existing-url");
+    verify(assetMapper, never()).findPhotosByVenueId(any(UUID.class));
+    verify(presigningMinioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
+    verify(venueMapper, never()).updatePrimaryPhotoUrl(any(UUID.class), any());
+  }
+
+  @Test
+  @DisplayName("syncPrimaryPhoto persists nothing when the venue has no photo")
+  void syncPrimaryPhotoNoPhotoIsNoOp() {
+    stubVenue();
+    when(assetMapper.findPhotosByVenueId(VENUE_ID)).thenReturn(List.of());
+
+    final String url = service.syncPrimaryPhoto(VENUE_ID);
+
+    assertThat(url).isNull();
+    verify(venueMapper, never()).updatePrimaryPhotoUrl(any(UUID.class), any());
+  }
+
+  @Test
+  @DisplayName("syncPrimaryPhoto returns null when the venue does not exist")
+  void syncPrimaryPhotoMissingVenueReturnsNull() {
+    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.empty());
+
+    assertThat(service.syncPrimaryPhoto(VENUE_ID)).isNull();
+  }
+
   private void verifyNoStorageOrPersistence() throws Exception {
     verify(minioClient, never()).statObject(any(StatObjectArgs.class));
     verify(presigningMinioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));

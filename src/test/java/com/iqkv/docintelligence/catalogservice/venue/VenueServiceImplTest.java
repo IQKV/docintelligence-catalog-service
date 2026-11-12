@@ -47,6 +47,8 @@ class VenueServiceImplTest {
   @Mock
   private VenueMapper venueMapper;
   @Mock
+  private VenueAssetService venueAssetService;
+  @Mock
   private VenueEmbeddingService embeddingService;
   @Mock
   private VenueSemanticSearchService semanticSearchService;
@@ -55,7 +57,7 @@ class VenueServiceImplTest {
 
   @BeforeEach
   void setUp() {
-    service = new VenueServiceImpl(venueMapper, embeddingService, semanticSearchService);
+    service = new VenueServiceImpl(venueMapper, venueAssetService, embeddingService, semanticSearchService);
   }
 
   @Test
@@ -70,6 +72,47 @@ class VenueServiceImplTest {
     assertThat(response.items()).hasSize(1);
     assertThat(response.totalElements()).isEqualTo(1L);
     assertThat(response.items().get(0).name()).isEqualTo("Grand Hall");
+  }
+
+  @Test
+  @DisplayName("searchVenues backfills a missing primary photo from the venue's photo assets")
+  void searchBackfillsMissingPrimaryPhoto() {
+    final UUID id = UUID.randomUUID();
+    when(venueMapper.search("grand", "Paris", "name", "asc", 20, 0))
+        .thenReturn(List.of(savedVenue(id, "Grand Hall")));
+    when(venueMapper.countSearch("grand", "Paris")).thenReturn(1L);
+    when(venueAssetService.syncPrimaryPhoto(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
+
+    final var response = service.searchVenues("grand", "Paris", "name", "asc", 20, 0);
+
+    assertThat(response.items().get(0).primaryPhotoUrl()).isEqualTo("https://cdn.example.com/grand-hall.jpg");
+  }
+
+  @Test
+  @DisplayName("searchVenues keeps an existing primary photo and does not consult the asset service")
+  void searchKeepsExistingPrimaryPhoto() {
+    final UUID id = UUID.randomUUID();
+    final Venue venue = savedVenue(id, "Grand Hall");
+    venue.setPrimaryPhotoUrl("https://cdn.example.com/existing.jpg");
+    when(venueMapper.search("grand", "Paris", "name", "asc", 20, 0)).thenReturn(List.of(venue));
+    when(venueMapper.countSearch("grand", "Paris")).thenReturn(1L);
+
+    final var response = service.searchVenues("grand", "Paris", "name", "asc", 20, 0);
+
+    assertThat(response.items().get(0).primaryPhotoUrl()).isEqualTo("https://cdn.example.com/existing.jpg");
+    verify(venueAssetService, never()).syncPrimaryPhoto(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("getPublicVenue backfills a missing primary photo from the venue's photo assets")
+  void getPublicVenueBackfillsMissingPrimaryPhoto() {
+    final UUID id = UUID.randomUUID();
+    when(venueMapper.findById(id)).thenReturn(Optional.of(savedVenue(id, "Grand Hall")));
+    when(venueAssetService.syncPrimaryPhoto(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
+
+    final var response = service.getPublicVenue(id);
+
+    assertThat(response.primaryPhotoUrl()).isEqualTo("https://cdn.example.com/grand-hall.jpg");
   }
 
   @Test
