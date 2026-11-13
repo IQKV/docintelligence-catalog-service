@@ -265,4 +265,46 @@ public final class VenueDtos {
                                                   long totalElements,
                                                   VenueSemanticSearchFilters appliedFilters) {
   }
+
+  // ─── Enrichment assistant ─────────────────────────────────────────────────
+
+  /**
+   * Request body for the AI-assisted venue profile enrichment endpoint.
+   *
+   * <p>{@code message} is the tenant's free-text question or description (e.g. "We're a 500-seat
+   * rooftop bar in London with in-house catering"). {@code fieldHint} optionally scopes the
+   * assistant's reply to one metadata group (e.g. {@code capacity}, {@code amenities}). {@code
+   * currentMetadata} optionally carries the venue's current serialised metadata document so the
+   * assistant can avoid re-suggesting already-filled fields.
+   */
+  public record VenueEnrichmentSuggestionRequest(
+      @NotBlank String message,
+      String fieldHint,
+      String currentMetadata) {
+  }
+
+  /**
+   * A single structured field suggestion that maps directly onto the {@code metadata.items} array
+   * shape, so the UI can apply it immediately via {@code PATCH /{venueId}/metadata}.
+   *
+   * @param group the metadata group key (e.g. {@code capacity}, {@code venue_type})
+   * @param field the field key within the group (e.g. {@code max_total}, {@code venue_type})
+   * @param value the suggested value as a string; numeric values are expressed as strings here
+   *              and the UI is responsible for coercing the type when building the metadata patch
+   */
+  public record VenueEnrichmentSuggestion(String group, String field, String value) {
+  }
+
+  /**
+   * Response from the AI-assisted venue profile enrichment endpoint.
+   *
+   * <p>{@code reply} is the human-readable answer rendered in the tenant UI chat widget.
+   * {@code suggestedPatches} carries the structured field suggestions extracted from the reply;
+   * it may be empty when the model cannot produce structured output — the assistant always
+   * degrades gracefully to {@code reply}-only rather than failing.
+   */
+  public record VenueEnrichmentSuggestionResponse(
+      String reply,
+      List<VenueEnrichmentSuggestion> suggestedPatches) {
+  }
 }
