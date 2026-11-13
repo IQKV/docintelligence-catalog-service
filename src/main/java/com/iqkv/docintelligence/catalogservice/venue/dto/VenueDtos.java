@@ -40,6 +40,7 @@ public final class VenueDtos {
   public record VenueResponse(
       UUID id,
       String name,
+      String description,
       String address,
       String city,
       BigDecimal locationLat,
@@ -86,6 +87,7 @@ public final class VenueDtos {
    */
   public record VenueWriteRequest(
       @NotBlank String name,
+      String description,
       String address,
       String city,
       BigDecimal locationLat,
@@ -103,6 +105,7 @@ public final class VenueDtos {
    */
   public record VenuePatchRequest(
       String name,
+      String description,
       String address,
       String city,
       BigDecimal locationLat,
@@ -122,6 +125,7 @@ public final class VenueDtos {
    */
   public record VenuePublicWriteRequest(
       @NotBlank String name,
+      String description,
       String address,
       String city,
       BigDecimal locationLat,
@@ -147,6 +151,7 @@ public final class VenueDtos {
    */
   public record VenuePublicPatchRequest(
       String name,
+      String description,
       String address,
       String city,
       BigDecimal locationLat,
@@ -165,6 +170,7 @@ public final class VenueDtos {
   public record VenuePublicResponse(
       UUID id,
       String name,
+      String description,
       String address,
       String city,
       BigDecimal locationLat,

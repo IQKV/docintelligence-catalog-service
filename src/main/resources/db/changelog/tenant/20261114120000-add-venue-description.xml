@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Brief venue description — the short "About" line shown under a venue's name, e.g. the
+         first paragraph of a Google Maps location ("Arty bar & club with a menu of upscale
+         barbecue dishes, live alternative music & DJs."). Plain text, optional. Extracted values
+         land here; NULL when the venue has no description.
+
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before
+         these changesets run, so no schemaName is set on the statements below). -->
+
+    <changeSet id="20261114120000-add-venue-description" author="iqkv">
+
+        <addColumn tableName="venues">
+            <column name="description" type="TEXT"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="venues" columnName="description"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

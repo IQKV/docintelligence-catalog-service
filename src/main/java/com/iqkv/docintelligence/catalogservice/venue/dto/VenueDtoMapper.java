@@ -45,6 +45,7 @@ public final class VenueDtoMapper {
     return new VenueDtos.VenueResponse(
         venue.getId(),
         venue.getName(),
+        venue.getDescription(),
         venue.getAddress(),
         venue.getCity(),
         venue.getLocationLat(),
@@ -91,6 +92,7 @@ public final class VenueDtoMapper {
    */
   public static void applyWrite(final Venue venue, final VenueDtos.VenueWriteRequest request) {
     venue.setName(request.name());
+    venue.setDescription(request.description());
     venue.setAddress(request.address());
     venue.setCity(request.city());
     venue.setLocationLat(request.locationLat());
@@ -107,6 +109,9 @@ public final class VenueDtoMapper {
   public static void applyPatch(final Venue venue, final VenueDtos.VenuePatchRequest request) {
     if (request.name() != null) {
       venue.setName(request.name());
+    }
+    if (request.description() != null) {
+      venue.setDescription(request.description());
     }
     if (request.address() != null) {
       venue.setAddress(request.address());
@@ -145,6 +150,7 @@ public final class VenueDtoMapper {
     return new VenueDtos.VenuePublicResponse(
         venue.getId(),
         venue.getName(),
+        venue.getDescription(),
         venue.getAddress(),
         venue.getCity(),
         venue.getLocationLat(),
@@ -197,6 +203,7 @@ public final class VenueDtoMapper {
    */
   public static void applyPublicWrite(final Venue venue, final VenueDtos.VenuePublicWriteRequest request) {
     venue.setName(request.name());
+    venue.setDescription(request.description());
     venue.setAddress(request.address());
     venue.setCity(request.city());
     venue.setLocationLat(request.locationLat());
@@ -211,6 +218,9 @@ public final class VenueDtoMapper {
   public static void applyPublicPatch(final Venue venue, final VenueDtos.VenuePublicPatchRequest request) {
     if (request.name() != null) {
       venue.setName(request.name());
+    }
+    if (request.description() != null) {
+      venue.setDescription(request.description());
     }
     if (request.address() != null) {
       venue.setAddress(request.address());

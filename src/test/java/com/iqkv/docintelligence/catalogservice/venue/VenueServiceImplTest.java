@@ -143,7 +143,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(any(UUID.class))).thenReturn(Optional.of(savedVenue(UUID.randomUUID(), "Grand Hall")));
 
     final var response = service.createVenue(new VenueDtos.VenueWriteRequest(
-        "Grand Hall", "1 Rue", "Paris", new BigDecimal("48.856614"), new BigDecimal("2.352221"),
+        "Grand Hall", null, "1 Rue", "Paris", new BigDecimal("48.856614"), new BigDecimal("2.352221"),
         null, null, "MANUAL", null));
 
     verify(venueMapper).insert(any(Venue.class));
@@ -158,7 +158,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.of(existing));
 
     service.replaceVenue(id, new VenueDtos.VenueWriteRequest(
-        "Grand Hall", "1 Rue", "Paris", null, null, null, null, "MANUAL", null));
+        "Grand Hall", null, "1 Rue", "Paris", null, null, null, null, "MANUAL", null));
 
     verify(venueMapper).update(existing);
     assertThat(existing.getName()).isEqualTo("Grand Hall");
@@ -172,7 +172,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.replaceVenue(id, new VenueDtos.VenueWriteRequest(
-        "Grand Hall", null, null, null, null, null, null, "MANUAL", null)))
+        "Grand Hall", null, null, null, null, null, null, null, "MANUAL", null)))
         .isInstanceOf(VenueNotFoundException.class);
     verify(venueMapper, never()).update(any(Venue.class));
   }
@@ -185,7 +185,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.of(existing));
 
     service.patchVenue(id, new VenueDtos.VenuePatchRequest(
-        "New Name", null, null, null, null, null, null, null, null));
+        "New Name", null, null, null, null, null, null, null, null, null));
 
     verify(venueMapper).update(existing);
     assertThat(existing.getName()).isEqualTo("New Name");
