@@ -21,7 +21,7 @@ docintelligence-catalog-service/
 ├── src/
 │   ├── main/
 │   │   ├── java/com/iqkv/docintelligence/catalogservice/
-│   │   │   ├── <feature-slice>/      # One package per vertical slice (e.g. mastervenue, venuedeck, ping)
+│   │   │   ├── <feature-slice>/      # One package per vertical slice (e.g. mastervenue, venue, ping)
 │   │   │   │   ├── <Feature>RestResource.java       # Tenant/public REST surface (TENANT_OWNER/MEMBER)
 │   │   │   │   ├── Admin<Feature>RestResource.java  # Admin REST surface (PLATFORM_ADMIN)
 │   │   │   │   ├── <Feature>Service.java            # Service contract
@@ -57,19 +57,21 @@ docintelligence-catalog-service/
 
 **Key structural concepts:**
 
-- **Feature slice**: A self-contained top-level package for one feature (`mastervenue`, `venuedeck`, `ping`) that
+- **Feature slice**: A self-contained top-level package for one feature (`mastervenue`, `venue`, `ping`) that
   holds its REST resources, service contract + implementation, DTOs and slice exceptions. Add a
   feature by adding a sibling package — never introduce `domain`/`application`/`adapter` layers.
 - **Infrastructure**: Cross-cutting technical concerns (config, security, messaging, persistence)
   with no business logic.
 - **Shared kernel**: Common exceptions and utilities reused across slices; must not depend on any
   slice or on `infrastructure`.
-- **Authorities & tenant scoping**: tenant callers carry `TENANT_OWNER` or `MEMBER`; platform
+- **Authorities & tenant scoping**: tenant callers carry `TENANT_OWNER`, `MEMBER` or `ADMIN`; platform
   administrators carry `PLATFORM_ADMIN`. Tenant resources guard with `@PreAuthorize` — `hasAuthority('MEMBER')`
-  where only members may act, or `hasAnyAuthority('TENANT_OWNER', 'MEMBER')` where tenant owners may
-  also act (e.g. `venuedeck`). Tenant context is resolved from the `X-Tenant-ID` header or the JWT
-  `tenant_id` claim for `/api/v1/catalog/**`; `/api/v1/catalog/admin/**` is skipped by
-  `TenantExtractionFilter` and each request is scoped from the `{tenantKey}` path variable.
+  where only members may act, `hasAnyAuthority('TENANT_OWNER', 'MEMBER')` where tenant owners may
+  also act, or `hasAnyAuthority('TENANT_OWNER', 'ADMIN')` for owner/admin writes; the `venue` slice
+  uses all three across its asset, text-content and enrichment surfaces. Tenant context is resolved
+  from the `X-Tenant-ID` header or the JWT `tenant_id` claim for `/api/v1/catalog/**`;
+  `/api/v1/catalog/admin/**` is skipped by `TenantExtractionFilter` and each request is scoped from
+  the `{tenantKey}` path variable.
 - **Domain model & persistence**: Owned by the shared artifact `com.iqkv:docintelligence-venue`
   (models + XML mappers), consumed here via `@MapperScan` and `classpath*:mappers/**/*.xml`. This
   service carries no `domain`, `application` or `adapter` packages.
@@ -170,7 +172,7 @@ Format: `type(scope): subject`
 
 - Subject: imperative, lowercase, no trailing period, ≤ 72 chars
 - Types: `feat`, `fix`, `improvement`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`, `revert`
-- Scope: affected feature slice or technical package (e.g. `mastervenue`, `ping`, `security`, `messaging`, `deps`)
+- Scope: affected feature slice or technical package (e.g. `mastervenue`, `venue`, `ping`, `security`, `messaging`, `deps`)
 - For `fix`: describe the symptom and trigger, not the code change
     - ✅ `fix(security): unauthenticated requests bypass tenant guard in single-tenant mode`
     - ❌ `fix(security): add missing auth check`
