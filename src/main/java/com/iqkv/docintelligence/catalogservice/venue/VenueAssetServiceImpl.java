@@ -24,6 +24,8 @@ import com.iqkv.docintelligence.catalogservice.infrastructure.config.ObjectStora
 import com.iqkv.docintelligence.catalogservice.shared.exception.InvalidUploadRequestException;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueAssetDtoMapper;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueAssetDtos;
+import com.iqkv.docintelligence.venue.MasterVenueAsset;
+import com.iqkv.docintelligence.venue.MasterVenueAssetMapper;
 import com.iqkv.docintelligence.venue.Venue;
 import com.iqkv.docintelligence.venue.VenueAsset;
 import com.iqkv.docintelligence.venue.VenueAssetMapper;
@@ -75,6 +77,7 @@ public class VenueAssetServiceImpl implements VenueAssetService {
 
   private final VenueMapper venueMapper;
   private final VenueAssetMapper assetMapper;
+  private final MasterVenueAssetMapper masterVenueAssetMapper;
   private final MinioClient minioClient;
   private final MinioClient presigningMinioClient;
   private final ObjectStorageConfigurationProperties storageProps;
@@ -82,12 +85,14 @@ public class VenueAssetServiceImpl implements VenueAssetService {
 
   public VenueAssetServiceImpl(final VenueMapper venueMapper,
                                final VenueAssetMapper assetMapper,
+                               final MasterVenueAssetMapper masterVenueAssetMapper,
                                final MinioClient minioClient,
                                @Qualifier("presigningMinioClient") final MinioClient presigningMinioClient,
                                final ObjectStorageConfigurationProperties storageProps,
                                final ApplicationEventPublisher eventPublisher) {
     this.venueMapper = venueMapper;
     this.assetMapper = assetMapper;
+    this.masterVenueAssetMapper = masterVenueAssetMapper;
     this.minioClient = minioClient;
     this.presigningMinioClient = presigningMinioClient;
     this.storageProps = storageProps;
@@ -194,6 +199,44 @@ public class VenueAssetServiceImpl implements VenueAssetService {
         .map(a -> VenueAssetDtoMapper.toPublicResponse(a, generatePresignedGetUrlSafe(a.getS3Key())))
         .toList();
     return new VenueAssetDtos.VenueAssetPublicListResponse(items, items.size());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public VenueAssetDtos.VenueAssetPublicListResponse listMasterPhotos(final UUID venueId) {
+    final Venue venue = requireVenue(venueId);
+    final UUID masterVenueId = venue.getMasterVenueId();
+    if (masterVenueId == null) {
+      return new VenueAssetDtos.VenueAssetPublicListResponse(List.of(), 0);
+    }
+    final List<MasterVenueAsset> photos = masterVenueAssetMapper.findPhotosByMasterVenueId(masterVenueId);
+    final List<VenueAssetDtos.VenueAssetPublicResponse> items = photos.stream()
+        .map(a -> toMasterPublicResponse(a, generatePresignedGetUrlSafe(a.getS3Key()), masterVenueId))
+        .toList();
+    return new VenueAssetDtos.VenueAssetPublicListResponse(items, items.size());
+  }
+
+  /**
+   * Projects a master-catalog asset into the same public photo shape the tenant gallery renders;
+   * {@code venueId} points at the owning master venue and there is no uploader.
+   */
+  private static VenueAssetDtos.VenueAssetPublicResponse toMasterPublicResponse(final MasterVenueAsset asset,
+                                                                               final String sourceUrl,
+                                                                               final UUID masterVenueId) {
+    return new VenueAssetDtos.VenueAssetPublicResponse(
+        asset.getId(),
+        masterVenueId,
+        asset.getAssetType(),
+        asset.getPhotoCategory(),
+        asset.getDisplayOrder(),
+        asset.getLabel(),
+        asset.getFileName(),
+        asset.getContentType(),
+        asset.getSizeBytes(),
+        sourceUrl,
+        null,
+        asset.getCreatedAt(),
+        asset.getUpdatedAt());
   }
 
   @Override

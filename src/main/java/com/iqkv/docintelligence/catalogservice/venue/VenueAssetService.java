@@ -68,6 +68,17 @@ public interface VenueAssetService {
   VenueAssetDtos.VenueAssetPublicListResponse listPhotosPublic(UUID venueId);
 
   /**
+   * Photos of the master-catalog venue this venue is linked to — the reference gallery shown
+   * beneath the venue's own photos. Each item carries a time-limited presigned GET URL in
+   * {@code sourceUrl}. Returns an empty page when the venue has no master link, and throws
+   * {@link VenueNotFoundException} when the venue does not exist.
+   *
+   * @param venueId the tenant venue whose master-catalog link is resolved
+   * @return the master venue's photos, or an empty page when the venue has no master link
+   */
+  VenueAssetDtos.VenueAssetPublicListResponse listMasterPhotos(UUID venueId);
+
+  /**
    * Resolves a fresh presigned GET URL for the venue's primary photo — the first PHOTO asset by
    * display order. Resolved at read time because a presigned URL is time-limited and cannot be
    * persisted; returns {@code null} when the venue has no photo.

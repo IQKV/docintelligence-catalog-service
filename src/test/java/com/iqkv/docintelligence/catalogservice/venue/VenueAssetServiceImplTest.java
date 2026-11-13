@@ -32,6 +32,8 @@ import java.util.UUID;
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.ObjectStorageConfigurationProperties;
 import com.iqkv.docintelligence.catalogservice.shared.exception.InvalidUploadRequestException;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueAssetDtos;
+import com.iqkv.docintelligence.venue.MasterVenueAsset;
+import com.iqkv.docintelligence.venue.MasterVenueAssetMapper;
 import com.iqkv.docintelligence.venue.Venue;
 import com.iqkv.docintelligence.venue.VenueAsset;
 import com.iqkv.docintelligence.venue.VenueAssetMapper;
@@ -65,6 +67,8 @@ class VenueAssetServiceImplTest {
   @Mock
   private VenueAssetMapper assetMapper;
   @Mock
+  private MasterVenueAssetMapper masterVenueAssetMapper;
+  @Mock
   private MinioClient minioClient;
   @Mock
   private MinioClient presigningMinioClient;
@@ -80,7 +84,8 @@ class VenueAssetServiceImplTest {
         "http://localhost:9000", "", "iqkv", "pw", "catalog-assets", "us-east-1", false,
         new ObjectStorageConfigurationProperties.Upload(MAX_SIZE, 60, List.of(ALLOWED_TYPE)));
     service = new VenueAssetServiceImpl(
-        venueMapper, assetMapper, minioClient, presigningMinioClient, props, eventPublisher);
+        venueMapper, assetMapper, masterVenueAssetMapper, minioClient, presigningMinioClient,
+        props, eventPublisher);
   }
 
   @AfterEach
@@ -346,6 +351,65 @@ class VenueAssetServiceImplTest {
 
     assertThat(response.items()).hasSize(1);
     assertThat(response.items().get(0).assetType()).isEqualTo("PHOTO");
+  }
+
+  @Test
+  @DisplayName("listMasterPhotos returns an empty page and reads no master asset when the venue has no master link")
+  void listMasterPhotosNoMasterLinkReturnsEmpty() {
+    stubVenue();
+
+    final var response = service.listMasterPhotos(VENUE_ID);
+
+    assertThat(response.items()).isEmpty();
+    assertThat(response.totalElements()).isZero();
+    verify(masterVenueAssetMapper, never()).findPhotosByMasterVenueId(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("listMasterPhotos presigns the linked master venue's photos")
+  void listMasterPhotosPresignsMasterPhotos() throws Exception {
+    final UUID masterVenueId = UUID.randomUUID();
+    final Venue venue = new Venue();
+    venue.setId(VENUE_ID);
+    venue.setMasterVenueId(masterVenueId);
+    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.of(venue));
+
+    when(masterVenueAssetMapper.findPhotosByMasterVenueId(masterVenueId))
+        .thenReturn(List.of(masterAsset(masterVenueId)));
+    when(presigningMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+        .thenReturn("http://master-presigned-url");
+
+    final var response = service.listMasterPhotos(VENUE_ID);
+
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.totalElements()).isEqualTo(1L);
+    assertThat(response.items().get(0).assetType()).isEqualTo("PHOTO");
+    assertThat(response.items().get(0).sourceUrl()).isEqualTo("http://master-presigned-url");
+    verify(masterVenueAssetMapper).findPhotosByMasterVenueId(masterVenueId);
+  }
+
+  @Test
+  @DisplayName("listMasterPhotos throws when the venue does not exist")
+  void listMasterPhotosThrowsWhenVenueMissing() {
+    when(venueMapper.findById(VENUE_ID)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.listMasterPhotos(VENUE_ID))
+        .isInstanceOf(VenueNotFoundException.class);
+  }
+
+  private static MasterVenueAsset masterAsset(final UUID masterVenueId) {
+    final MasterVenueAsset asset = new MasterVenueAsset();
+    asset.setId(UUID.randomUUID());
+    asset.setMasterVenueId(masterVenueId);
+    asset.setAssetType("PHOTO");
+    asset.setDisplayOrder(0);
+    asset.setFileName("master.jpg");
+    asset.setContentType("image/jpeg");
+    asset.setSizeBytes(4096L);
+    asset.setS3Key("docintelligence/master-catalog/venues/" + masterVenueId + "/assets/x/master.jpg");
+    asset.setCreatedAt(Instant.now());
+    asset.setUpdatedAt(Instant.now());
+    return asset;
   }
 
   @Test

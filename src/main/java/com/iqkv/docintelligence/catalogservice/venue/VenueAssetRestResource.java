@@ -204,6 +204,29 @@ public class VenueAssetRestResource {
     return ResponseEntity.ok(venueAssetService.getPreviewUrl(venueId, id));
   }
 
+  @GetMapping("/master-photos")
+  @Operation(
+      summary = "List the master-catalog photos of a venue",
+      description = "When the venue is linked to a master-catalog record, returns the photos of "
+                    + "that master venue, ordered by display order — the reference gallery shown "
+                    + "beneath the venue's own photos. Each item includes a time-limited presigned "
+                    + "GET URL in 'sourceUrl'. Returns an empty list when the venue has no master "
+                    + "link. Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Master-catalog photos of the venue",
+                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetPublicListResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueAssetDtos.VenueAssetPublicListResponse> listMasterPhotos(
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId) {
+    return ResponseEntity.ok(venueAssetService.listMasterPhotos(venueId));
+  }
+
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
   @Operation(

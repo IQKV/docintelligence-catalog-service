@@ -111,6 +111,13 @@ class VenueAssetRestResourceSecurityTest {
   }
 
   @Test
+  @DisplayName("Master photos rejects an anonymous caller once the tenant is resolved")
+  void masterPhotosRejectsAnonymous() throws Exception {
+    mockMvc.perform(get(BASE_PATH + "/master-photos").header(TENANT_HEADER, TENANT_KEY))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
   @DisplayName("Detail rejects an anonymous caller once the tenant is resolved")
   void detailRejectsAnonymous() throws Exception {
     mockMvc.perform(get(BASE_PATH + "/" + ASSET_ID).header(TENANT_HEADER, TENANT_KEY))
