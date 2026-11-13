@@ -6,8 +6,11 @@ GitHub template for the iQ Key Value platform. Extends the standard `foundation-
 
 This template provides:
 
-- **Venue catalog** — multi-tenant venue CRUD with safe projection (curation fields hidden from tenant users); write endpoints require `TENANT_OWNER`/`ADMIN` authority; read endpoints are open to `MEMBER`
+- **Venue catalog** — multi-tenant venue CRUD with safe projection (curation fields hidden from tenant users); write endpoints require `TENANT_OWNER`/`ADMIN` authority; read endpoints are open to `MEMBER`, `TENANT_OWNER`, or `ADMIN`
 - **Venue asset uploads** — two-phase presigned MinIO upload for venue photos and attachments (initiate → direct upload → confirm) nested under the owning venue, with tenant and admin surfaces mirrored
+- **Venue asset import** — venue-less document upload (PDF/CSV/image) that the processing worker turns into a venue record; the client polls the asset until its derived venue is linked
+- **Venue text contents** — raw/markdown text chunks extracted from venue sources, with keyword and semantic search plus venue linking, on both the tenant and admin surfaces
+- **AI venue enrichment** — "Fill with AI" assistant that turns a tenant's free-text description into a reply plus structured `metadata.items` suggestions the UI can apply
 - **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
 - **Ollama connectivity** — LLM client wired to a local Ollama instance via `spring.ai.ollama.*` (base URL and model configurable per environment)
 - **Object storage** — MinIO (S3-compatible) client bound to a private `catalog-assets` bucket, served to clients through presigned URLs
@@ -64,17 +67,17 @@ Read-only tenant surface. Responses use the public projection — `confidence`, 
 
 Full CRUD over the tenant's own venue records. Read endpoints require the `MEMBER`, `TENANT_OWNER`, or `ADMIN` authority; write endpoints require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. Responses use the safe projection — `confidence` and `source` are not exposed; `metadata` is included so tenants can read and edit their own venue metadata document; the optional `masterVenueId` relation key is kept.
 
-| Method   | Path                      | Auth                                | Description                                                                                                |
-| :------- | :------------------------ | :---------------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/venues`                 | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Search by keyword (`search`) and exact city (`city`), with optional sort; paginated via `limit` / `offset` |
-| `GET`    | `/venues/{id}`            | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Fetch a single tenant venue by UUID                                                                        |
-| `GET`    | `/venues/search/semantic` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | AI semantic search; query is parsed by an LLM planner into hard filters + a vector query                   |
-| `POST`   | `/venues`                 | JWT `TENANT_OWNER`/`ADMIN`          | Create a venue in the active tenant schema; curation fields initialised to safe defaults; returns `201`    |
-| `PUT`    | `/venues/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Full replace of tenant-visible fields; curation fields are not modified; returns `404` if not found        |
-| `PATCH`  | `/venues/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Partial update — only non-null fields are overwritten; curation fields are never modified                  |
-| `PATCH`  | `/venues/{id}/metadata`   | JWT `TENANT_OWNER`/`ADMIN`          | Replace the full metadata document; other fields are untouched                                             |
-| `DELETE` | `/venues/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Permanently deletes the venue; returns `204`                                                               |
-| `DELETE` | `/venues`                 | JWT `TENANT_OWNER`/`ADMIN`          | Bulk delete up to 100 venues by id list; idempotent; returns `204`                                         |
+| Method   | Path                      | Auth                                | Description                                                                                                                               |
+| :------- | :------------------------ | :---------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/venues`                 | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Search by keyword (`search`) and exact city (`city`), with optional sort; paginated via `limit` / `offset`                                |
+| `GET`    | `/venues/{id}`            | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Fetch a single tenant venue by UUID                                                                                                       |
+| `GET`    | `/venues/search/semantic` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | AI semantic search; query is parsed by an LLM planner into hard filters + a vector query; optional `city` override, `limit` capped at 100 |
+| `POST`   | `/venues`                 | JWT `TENANT_OWNER`/`ADMIN`          | Create a venue in the active tenant schema; curation fields initialised to safe defaults; returns `201`                                   |
+| `PUT`    | `/venues/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Full replace of tenant-visible fields; curation fields are not modified; returns `404` if not found                                       |
+| `PATCH`  | `/venues/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Partial update — only non-null fields are overwritten; curation fields are never modified                                                 |
+| `PATCH`  | `/venues/{id}/metadata`   | JWT `TENANT_OWNER`/`ADMIN`          | Replace the full metadata document; other fields are untouched                                                                            |
+| `DELETE` | `/venues/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Permanently deletes the venue; returns `204`                                                                                              |
+| `DELETE` | `/venues`                 | JWT `TENANT_OWNER`/`ADMIN`          | Bulk delete up to 100 venues by id list; idempotent; returns `204`                                                                        |
 
 `DELETE /venues` takes a JSON body of `{"ids": [uuid, ...]}` (1–100 ids). Ids that match no venue are silently ignored; empty or oversized lists are rejected with `400`.
 
@@ -82,16 +85,53 @@ Full CRUD over the tenant's own venue records. Read endpoints require the `MEMBE
 
 Two-phase presigned upload for venue photos and attachments, plus list, detail, and delete. Upload initiation and reads require `TENANT_OWNER` or `MEMBER` authority; delete requires `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim.
 
-| Method   | Path                                    | Auth                        | Description                                                                                                                            |
-| :------- | :-------------------------------------- | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST`   | `/venues/{venueId}/assets/initiate`     | JWT `TENANT_OWNER`/`MEMBER` | Validate declared content type and size, mint a presigned S3 `PUT` URL, return `assetId` + `objectKey`; no row persisted until confirm |
-| `POST`   | `/venues/{venueId}/assets/{id}/confirm` | JWT `TENANT_OWNER`/`MEMBER` | Validate object key and confirm object exists in storage; persists asset metadata; returns `400` on key mismatch or missing object     |
-| `GET`    | `/venues/{venueId}/assets`              | JWT `TENANT_OWNER`/`MEMBER` | List all assets of the venue ordered by `displayOrder`                                                                                 |
-| `GET`    | `/venues/{venueId}/assets/photos`       | JWT `TENANT_OWNER`/`MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                                                                    |
-| `GET`    | `/venues/{venueId}/assets/{id}`         | JWT `TENANT_OWNER`/`MEMBER` | Fetch a single asset; returns `404` when the venue or asset is not found or not owned by that venue                                    |
-| `DELETE` | `/venues/{venueId}/assets/{id}`         | JWT `TENANT_OWNER`/`ADMIN`  | Permanently deletes the asset row and removes the object from storage (best-effort); returns `204`                                     |
+| Method   | Path                                        | Auth                        | Description                                                                                                                            |
+| :------- | :------------------------------------------ | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/venues/{venueId}/assets/initiate`         | JWT `TENANT_OWNER`/`MEMBER` | Validate declared content type and size, mint a presigned S3 `PUT` URL, return `assetId` + `objectKey`; no row persisted until confirm |
+| `POST`   | `/venues/{venueId}/assets/{id}/confirm`     | JWT `TENANT_OWNER`/`MEMBER` | Validate object key and confirm object exists in storage; persists asset metadata; returns `400` on key mismatch or missing object     |
+| `GET`    | `/venues/{venueId}/assets`                  | JWT `TENANT_OWNER`/`MEMBER` | List all assets of the venue ordered by `displayOrder`                                                                                 |
+| `GET`    | `/venues/{venueId}/assets/photos`           | JWT `TENANT_OWNER`/`MEMBER` | List only `PHOTO` assets for gallery use, ordered by `displayOrder`                                                                    |
+| `GET`    | `/venues/{venueId}/assets/{id}`             | JWT `TENANT_OWNER`/`MEMBER` | Fetch a single asset; returns `404` when the venue or asset is not found or not owned by that venue                                    |
+| `GET`    | `/venues/{venueId}/assets/{id}/preview-url` | JWT `TENANT_OWNER`/`MEMBER` | Mint a short-lived presigned `GET` URL for the stored object (images and PDFs alike)                                                   |
+| `DELETE` | `/venues/{venueId}/assets/{id}`             | JWT `TENANT_OWNER`/`ADMIN`  | Permanently deletes the asset row and removes the object from storage (best-effort); returns `204`                                     |
 
 The upload flow is two-phase: call `initiate` to get a presigned `PUT` URL, upload the file directly to MinIO, then call `confirm` with the returned `objectKey`. Storage removal on delete is best-effort — a MinIO failure is logged but does not prevent the row from being deleted.
+
+### Venue asset import
+
+Venue-less document upload (PDF/CSV/image) from which `docintelligence-catalog-processing-worker` derives the venue record. Requires `TENANT_OWNER` or `MEMBER` authority; the object key is tenant-scoped. The two-phase presigned flow is identical to venue assets, but `confirm` persists the asset with a `null` venue and status `UPLOADED` so the worker picks it up.
+
+| Method | Path                         | Auth                        | Description                                                                                   |
+| :----- | :--------------------------- | :-------------------------- | :-------------------------------------------------------------------------------------------- |
+| `POST` | `/venue-assets/initiate`     | JWT `TENANT_OWNER`/`MEMBER` | Mint a presigned S3 `PUT` URL; return `assetId` + `objectKey`; no row persisted until confirm |
+| `POST` | `/venue-assets/{id}/confirm` | JWT `TENANT_OWNER`/`MEMBER` | Validate the object key and object, persist the venue-less asset with status `UPLOADED`       |
+| `GET`  | `/venue-assets/{id}`         | JWT `TENANT_OWNER`/`MEMBER` | Poll the asset and its processing status                                                      |
+
+The status lifecycle is `UPLOADED` → `PARSING` → `EXTRACTED` (the derived venue is linked — see `venueId`) or `FAILED` (see `failureReason`).
+
+### Venue enrichment
+
+AI-assisted venue profile enrichment for the tenant UI "Fill with AI" flow. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. When the chat model is unreachable or the AI feature flag is off, `suggestions` still returns `200` with a plain-text fallback reply and an empty patch list.
+
+| Method | Path                                       | Auth                        | Description                                                                                                                           |
+| :----- | :----------------------------------------- | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST` | `/venues/{venueId}/enrichment/suggestions` | JWT `TENANT_OWNER`/`MEMBER` | Send a free-text `message` (optional `fieldHint`, `currentMetadata`); receive a reply plus `metadata.items` suggestions               |
+| `POST` | `/venues/{venueId}/enrichment/apply`       | JWT `TENANT_OWNER`/`MEMBER` | Merge patches atomically into the metadata document (existing group/field rows replaced, absent ones appended); triggers re-embedding |
+
+### Venue text contents
+
+Raw or markdown text chunks extracted from venue source documents. Reads require `MEMBER`, `TENANT_OWNER`, or `ADMIN`; writes require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim.
+
+| Method   | Path                                   | Auth                                | Description                                                                                           |
+| :------- | :------------------------------------- | :---------------------------------- | :---------------------------------------------------------------------------------------------------- |
+| `GET`    | `/venue-text-contents`                 | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Keyword search over `content`, optionally filtered by `venueId`; paginated via `limit` / `offset`     |
+| `GET`    | `/venue-text-contents/venue/{venueId}` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | List all rows linked to the given venue                                                               |
+| `GET`    | `/venue-text-contents/{id}`            | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Fetch a single row; returns `404` when it does not exist                                              |
+| `GET`    | `/venue-text-contents/search/semantic` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Semantic search — rank embedded rows by cosine similarity; optional `venueId` filter, `limit` max 100 |
+| `POST`   | `/venue-text-contents`                 | JWT `TENANT_OWNER`/`ADMIN`          | Create a row; `venueId` is optional (the row may be linked later); returns `201`                      |
+| `PATCH`  | `/venue-text-contents/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Update `content`; only non-null fields are overwritten                                                |
+| `POST`   | `/venue-text-contents/{id}/link`       | JWT `TENANT_OWNER`/`ADMIN`          | Set `venueId` on a row created before the venue was derived                                           |
+| `DELETE` | `/venue-text-contents/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Permanently deletes the row; returns `204`                                                            |
 
 ### Admin
 
@@ -125,16 +165,31 @@ Full CRUD over the master venue catalog, using the admin projection (all curatio
 
 #### Admin tenant venue assets
 
-| Method   | Path                                                      | Auth                 | Description                                            |
-| :------- | :-------------------------------------------------------- | :------------------- | :----------------------------------------------------- |
-| `POST`   | `/admin/{tenantKey}/venues/{venueId}/assets/initiate`     | JWT `PLATFORM_ADMIN` | Initiate an asset upload on behalf of the named tenant |
-| `POST`   | `/admin/{tenantKey}/venues/{venueId}/assets/{id}/confirm` | JWT `PLATFORM_ADMIN` | Confirm an asset upload on behalf of the named tenant  |
-| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets`              | JWT `PLATFORM_ADMIN` | List all assets of a tenant venue                      |
-| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets/photos`       | JWT `PLATFORM_ADMIN` | List only `PHOTO` assets of a tenant venue             |
-| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets/{id}`         | JWT `PLATFORM_ADMIN` | Fetch a single asset of a tenant venue                 |
-| `DELETE` | `/admin/{tenantKey}/venues/{venueId}/assets/{id}`         | JWT `PLATFORM_ADMIN` | Delete an asset and its storage object; returns `204`  |
+| Method   | Path                                                          | Auth                 | Description                                                  |
+| :------- | :------------------------------------------------------------ | :------------------- | :----------------------------------------------------------- |
+| `POST`   | `/admin/{tenantKey}/venues/{venueId}/assets/initiate`         | JWT `PLATFORM_ADMIN` | Initiate an asset upload on behalf of the named tenant       |
+| `POST`   | `/admin/{tenantKey}/venues/{venueId}/assets/{id}/confirm`     | JWT `PLATFORM_ADMIN` | Confirm an asset upload on behalf of the named tenant        |
+| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets`                  | JWT `PLATFORM_ADMIN` | List all assets of a tenant venue                            |
+| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets/photos`           | JWT `PLATFORM_ADMIN` | List only `PHOTO` assets of a tenant venue                   |
+| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets/{id}`             | JWT `PLATFORM_ADMIN` | Fetch a single asset of a tenant venue                       |
+| `GET`    | `/admin/{tenantKey}/venues/{venueId}/assets/{id}/preview-url` | JWT `PLATFORM_ADMIN` | Mint a short-lived presigned `GET` URL for the stored object |
+| `DELETE` | `/admin/{tenantKey}/venues/{venueId}/assets/{id}`             | JWT `PLATFORM_ADMIN` | Delete an asset and its storage object; returns `204`        |
 
-> Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT TENANT_OWNER/ADMIN` = tenant owner or admin authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
+#### Admin venue asset import
+
+Venue-less import on behalf of the tenant named in the `{tenantKey}` path variable (`/api/v1/catalog/admin/{tenantKey}/venue-assets`). Requires the `PLATFORM_ADMIN` authority; `confirm` persists the asset with a `null` venue and status `UPLOADED` for the processing worker to derive the venue.
+
+| Method | Path                                           | Auth                 | Description                                                                                |
+| :----- | :--------------------------------------------- | :------------------- | :----------------------------------------------------------------------------------------- |
+| `POST` | `/admin/{tenantKey}/venue-assets/initiate`     | JWT `PLATFORM_ADMIN` | Initiate a venue-less import on behalf of the named tenant                                 |
+| `POST` | `/admin/{tenantKey}/venue-assets/{id}/confirm` | JWT `PLATFORM_ADMIN` | Confirm the upload and persist the venue-less asset with status `UPLOADED`                 |
+| `GET`  | `/admin/{tenantKey}/venue-assets/{id}`         | JWT `PLATFORM_ADMIN` | Poll the asset and its processing status (`UPLOADED` → `PARSING` → `EXTRACTED` / `FAILED`) |
+
+#### Admin venue text contents
+
+Raw/markdown text-content rows on behalf of the tenant named in the `{tenantKey}` path variable (`/api/v1/catalog/admin/{tenantKey}/venue-text-contents`). Requires the `PLATFORM_ADMIN` authority. Mirrors the tenant surface: search, list by venue, get, semantic search, create, patch, link, and delete.
+
+> Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT TENANT_OWNER/MEMBER` = tenant owner or member authority required; `JWT TENANT_OWNER/ADMIN` = tenant owner or admin authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
 
 ## Tech Stack
 
@@ -270,22 +325,24 @@ docker compose -f compose.container.yaml up -d
 │   │   ├── MasterVenueRestResource.java
 │   │   ├── MasterVenueService.java
 │   │   └── MasterVenueServiceImpl.java
-│   ├── venue/          # Tenant venue catalog — tenant CRUD + admin full CRUD + semantic search
+│   ├── venue/          # Tenant venue catalog — tenant CRUD + admin full CRUD + semantic search + assets + text contents + enrichment
 │   │   ├── dto/
+│   │   ├── AdminVenueAssetImportRestResource.java
 │   │   ├── AdminVenueAssetRestResource.java
 │   │   ├── AdminVenueRestResource.java
+│   │   ├── AdminVenueTextContentRestResource.java
+│   │   ├── VenueAssetImportRestResource.java
 │   │   ├── VenueAssetRestResource.java
 │   │   ├── VenueAssetService.java
 │   │   ├── VenueAssetServiceImpl.java
+│   │   ├── VenueEnrichmentAssistRestResource.java
+│   │   ├── VenueEnrichmentAssistantService.java
 │   │   ├── VenueRestResource.java
 │   │   ├── VenueService.java
-│   │   └── VenueServiceImpl.java
-│   ├── venuedeck/      # Venue deck upload — two-phase presigned MinIO upload + list/detail
-│   │   ├── dto/
-│   │   ├── AdminVenueDeckRestResource.java
-│   │   ├── VenueDeckRestResource.java
-│   │   ├── VenueDeckService.java
-│   │   └── VenueDeckServiceImpl.java
+│   │   ├── VenueServiceImpl.java
+│   │   ├── VenueTextContentRestResource.java
+│   │   ├── VenueTextContentService.java
+│   │   └── VenueTextContentServiceImpl.java
 │   ├── ping/           # Reachability probes across the three security tiers
 │   ├── infrastructure/ # Spring config, security, MyBatis, RabbitMQ setup
 │   └── shared/         # Common exceptions, utilities, value objects
