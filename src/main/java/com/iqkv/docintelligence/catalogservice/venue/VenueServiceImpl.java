@@ -309,16 +309,24 @@ public class VenueServiceImpl implements VenueService {
    * boolean are returned unchanged.
    */
   private static Object coerceValue(final String value) {
-    if (value == null) return null;
-    if ("true".equalsIgnoreCase(value)) return Boolean.TRUE;
-    if ("false".equalsIgnoreCase(value)) return Boolean.FALSE;
+    if (value == null) {
+      return null;
+    }
+    if ("true".equalsIgnoreCase(value)) {
+      return Boolean.TRUE;
+    }
+    if ("false".equalsIgnoreCase(value)) {
+      return Boolean.FALSE;
+    }
     try {
       return Long.parseLong(value);
     } catch (final NumberFormatException ignored) {
+      // not an integer — fall through to decimal handling
     }
     try {
       return new java.math.BigDecimal(value);
     } catch (final NumberFormatException ignored) {
+      // not a decimal — fall through to returning the original string
     }
     return value;
   }

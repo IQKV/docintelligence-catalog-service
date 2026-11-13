@@ -22,7 +22,6 @@ import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenueAiSearchProperties;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
-import com.iqkv.docintelligence.catalogservice.venue.dto.VenueTextContentDtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
