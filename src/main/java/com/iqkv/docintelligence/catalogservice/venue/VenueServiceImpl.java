@@ -17,7 +17,9 @@
 package com.iqkv.docintelligence.catalogservice.venue;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtoMapper;
@@ -28,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Use cases over tenant venue records — platform-admin CRUD plus the tenant-member read surface
@@ -56,15 +59,18 @@ public class VenueServiceImpl implements VenueService {
   private final VenueAssetService venueAssetService;
   private final VenueEmbeddingService embeddingService;
   private final VenueSemanticSearchService semanticSearchService;
+  private final ObjectMapper objectMapper;
 
   public VenueServiceImpl(final VenueMapper venueMapper,
                            final VenueAssetService venueAssetService,
                            final VenueEmbeddingService embeddingService,
-                           final VenueSemanticSearchService semanticSearchService) {
+                           final VenueSemanticSearchService semanticSearchService,
+                           final ObjectMapper objectMapper) {
     this.venueMapper = venueMapper;
     this.venueAssetService = venueAssetService;
     this.embeddingService = embeddingService;
     this.semanticSearchService = semanticSearchService;
+    this.objectMapper = objectMapper;
   }
 
   @Override
@@ -208,6 +214,17 @@ public class VenueServiceImpl implements VenueService {
         result.appliedFilters());
   }
 
+  @Override
+  public VenueDtos.VenuePublicResponse applyEnrichmentPatches(
+      final UUID id, final List<VenueDtos.VenueEnrichmentSuggestion> patches) {
+    final Venue venue = requireVenue(id);
+    final String merged = mergePatches(venue.getMetadata(), patches);
+    venue.setMetadata(merged);
+    venueMapper.update(venue);
+    embeddingService.embed(venue);
+    return toPublicResponse(requireVenue(id));
+  }
+
   private Venue requireVenue(final UUID id) {
     return venueMapper.findById(id)
         .orElseThrow(() -> new VenueNotFoundException(id));
@@ -227,5 +244,82 @@ public class VenueServiceImpl implements VenueService {
    */
   private VenueDtos.VenuePublicResponse toPublicResponse(final Venue venue) {
     return VenueDtoMapper.toPublicResponse(venue, venueAssetService.resolvePrimaryPhotoUrl(venue.getId()));
+  }
+
+  /**
+   * Merges {@code patches} into the current metadata JSON string.
+   *
+   * <p>The document schema is {@code {_schema_version: int, items: [{group, field, value}]}}.
+   * For each patch, every existing item matching the same {@code group}/{@code field} pair is
+   * removed and the new item is appended — identical to the client-side {@code setFieldValue}
+   * merge but executed atomically in the same transaction as the row update.
+   *
+   * <p>When the current metadata is {@code null}, empty, or not a parseable document, an empty
+   * document is used as the base so a bad metadata string never blocks enrichment from landing.
+   */
+  @SuppressWarnings("unchecked")
+  private String mergePatches(final String currentMetadata,
+                               final List<VenueDtos.VenueEnrichmentSuggestion> patches) {
+    try {
+      Map<String, Object> doc;
+      if (currentMetadata == null || currentMetadata.isBlank()) {
+        doc = new java.util.LinkedHashMap<>();
+        doc.put("_schema_version", 1);
+        doc.put("items", new ArrayList<>());
+      } else {
+        doc = objectMapper.readerForMapOf(Object.class).readValue(currentMetadata);
+        if (!(doc.get("items") instanceof List)) {
+          doc.put("items", new ArrayList<>());
+        }
+      }
+      final List<Map<String, Object>> items = (List<Map<String, Object>>) doc.get("items");
+      for (final VenueDtos.VenueEnrichmentSuggestion patch : patches) {
+        items.removeIf(item ->
+            patch.group().equals(item.get("group")) && patch.field().equals(item.get("field")));
+        final Map<String, Object> newItem = new java.util.LinkedHashMap<>();
+        newItem.put("group", patch.group());
+        newItem.put("field", patch.field());
+        // Coerce numeric strings to numbers so the stored type matches the ingest worker output.
+        newItem.put("value", coerceValue(patch.value()));
+        items.add(newItem);
+      }
+      return objectMapper.writeValueAsString(doc);
+    } catch (final Exception ex) {
+      log.warn("Could not merge enrichment patches into metadata, applying as raw replacement: {}", ex.getMessage());
+      // Last-resort: build a minimal document from the patches alone.
+      final List<Map<String, Object>> items = new ArrayList<>();
+      for (final VenueDtos.VenueEnrichmentSuggestion patch : patches) {
+        final Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("group", patch.group());
+        item.put("field", patch.field());
+        item.put("value", coerceValue(patch.value()));
+        items.add(item);
+      }
+      try {
+        return objectMapper.writeValueAsString(Map.of("_schema_version", 1, "items", items));
+      } catch (final Exception inner) {
+        throw new IllegalStateException("Failed to serialise enrichment patches", inner);
+      }
+    }
+  }
+
+  /**
+   * Coerces a string value that looks like an integer or boolean to its native JSON type, so the
+   * stored item matches the shape the ingest worker produces. Strings that are not numeric or
+   * boolean are returned unchanged.
+   */
+  private static Object coerceValue(final String value) {
+    if (value == null) return null;
+    if ("true".equalsIgnoreCase(value)) return Boolean.TRUE;
+    if ("false".equalsIgnoreCase(value)) return Boolean.FALSE;
+    try {
+      return Long.parseLong(value);
+    } catch (final NumberFormatException ignored) {
+    }
+    try {
+      return new java.math.BigDecimal(value);
+    } catch (final NumberFormatException ignored) {
+    }
+    return value;
   }
 }

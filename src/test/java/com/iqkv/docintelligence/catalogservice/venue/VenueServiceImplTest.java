@@ -52,12 +52,14 @@ class VenueServiceImplTest {
   private VenueEmbeddingService embeddingService;
   @Mock
   private VenueSemanticSearchService semanticSearchService;
+  @Mock
+  private tools.jackson.databind.ObjectMapper objectMapper;
 
   private VenueServiceImpl service;
 
   @BeforeEach
   void setUp() {
-    service = new VenueServiceImpl(venueMapper, venueAssetService, embeddingService, semanticSearchService);
+    service = new VenueServiceImpl(venueMapper, venueAssetService, embeddingService, semanticSearchService, objectMapper);
   }
 
   @Test

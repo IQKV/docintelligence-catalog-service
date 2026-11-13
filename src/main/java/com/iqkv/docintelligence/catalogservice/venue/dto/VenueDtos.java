@@ -266,6 +266,20 @@ public final class VenueDtos {
                                                   VenueSemanticSearchFilters appliedFilters) {
   }
 
+  /**
+   * Request body for the enrichment apply endpoint — a list of AI-suggested patches to merge
+   * atomically into the venue's current metadata document.
+   *
+   * <p>Each item maps to one {@code metadata.items} row using the same {@code group}/{@code field}
+   * addressing as the ingestion worker and the enrichment suggestions endpoint. The server reads
+   * the current document, removes any existing row for each {@code group}/{@code field} pair, and
+   * appends the new value — identical to the client-side {@code setFieldValue} merge but
+   * performed in one transaction so concurrent edits cannot race.
+   */
+  public record VenueEnrichmentApplyRequest(
+      @NotEmpty List<VenueEnrichmentSuggestion> patches) {
+  }
+
   // ─── Enrichment assistant ─────────────────────────────────────────────────
 
   /**

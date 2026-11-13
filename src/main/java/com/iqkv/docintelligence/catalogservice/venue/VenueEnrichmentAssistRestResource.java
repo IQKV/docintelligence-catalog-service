@@ -36,7 +36,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 /**
  * AI-assisted venue profile enrichment — tenant UI "Fill with AI" flow.
  *
@@ -60,9 +59,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class VenueEnrichmentAssistRestResource {
 
   private final VenueEnrichmentAssistantService enrichmentAssistantService;
+  private final VenueService venueService;
 
-  public VenueEnrichmentAssistRestResource(final VenueEnrichmentAssistantService enrichmentAssistantService) {
+  public VenueEnrichmentAssistRestResource(final VenueEnrichmentAssistantService enrichmentAssistantService,
+                                           final VenueService venueService) {
     this.enrichmentAssistantService = enrichmentAssistantService;
+    this.venueService = venueService;
   }
 
   @PostMapping("/suggestions")
@@ -93,5 +95,31 @@ public class VenueEnrichmentAssistRestResource {
       @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId,
       @Valid @RequestBody final VenueDtos.VenueEnrichmentSuggestionRequest request) {
     return ResponseEntity.ok(enrichmentAssistantService.suggest(venueId, request));
+  }
+
+  @PostMapping("/apply")
+  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'MEMBER')")
+  @Operation(
+      summary = "Apply AI enrichment patches to a venue's metadata",
+      description = "Merges the supplied patches atomically into the venue's current metadata "
+                    + "document. Each patch addresses one group/field row in the flat "
+                    + "metadata.items array — existing rows for the same address are replaced, "
+                    + "absent ones are appended. Triggers a re-embedding of the updated venue. "
+                    + "Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Patches applied, updated venue returned",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Request validation failed", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicResponse> apply(
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId,
+      @Valid @RequestBody final VenueDtos.VenueEnrichmentApplyRequest request) {
+    return ResponseEntity.ok(venueService.applyEnrichmentPatches(venueId, request.patches()));
   }
 }

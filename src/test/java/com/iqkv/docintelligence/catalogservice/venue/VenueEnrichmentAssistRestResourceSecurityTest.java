@@ -107,4 +107,55 @@ class VenueEnrichmentAssistRestResourceSecurityTest {
                 """))
         .andExpect(status().isBadRequest());
   }
+
+  // ─── /apply ──────────────────────────────────────────────────────────────
+
+  private static final String APPLY_PATH =
+      "/api/v1/catalog/venues/00000000-0000-0000-0000-000000000001/enrichment/apply";
+  private static final String VALID_APPLY_BODY = """
+      {"patches":[{"group":"venue_type","field":"venue_type","value":"Rooftop"}]}
+      """;
+
+  @Test
+  @DisplayName("Apply endpoint requires a resolved tenant identifier")
+  void applyRejectsMissingTenant() throws Exception {
+    mockMvc.perform(post(APPLY_PATH)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(VALID_APPLY_BODY))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("Apply endpoint rejects anonymous caller")
+  void applyRejectsAnonymous() throws Exception {
+    mockMvc.perform(post(APPLY_PATH)
+            .header(TENANT_HEADER, TENANT_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(VALID_APPLY_BODY))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  @DisplayName("Apply endpoint rejects PLATFORM_ADMIN — tenant surface only")
+  void applyRejectsPlatformAdmin() throws Exception {
+    mockMvc.perform(post(APPLY_PATH)
+            .header(TENANT_HEADER, TENANT_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(VALID_APPLY_BODY))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @WithMockUser(authorities = "MEMBER")
+  @DisplayName("Apply endpoint rejects empty patches list")
+  void applyRejectsEmptyPatches() throws Exception {
+    mockMvc.perform(post(APPLY_PATH)
+            .header(TENANT_HEADER, TENANT_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"patches":[]}
+                """))
+        .andExpect(status().isBadRequest());
+  }
 }
