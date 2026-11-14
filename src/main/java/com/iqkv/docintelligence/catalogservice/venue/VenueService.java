@@ -16,7 +16,6 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
-import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
@@ -63,12 +62,4 @@ public interface VenueService {
   VenueDtos.VenueSemanticSearchResponse semanticSearch(String query, String city, int limit);
 
   VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(String query, String city, int limit);
-
-  /**
-   * Merges {@code patches} into the venue's current metadata document atomically and returns the
-   * updated safe projection. Each patch addresses one {@code group}/{@code field} row in the flat
-   * {@code metadata.items} array — existing rows for the same address are replaced, absent ones
-   * are appended. Throws {@link VenueNotFoundException} when the venue does not exist.
-   */
-  VenueDtos.VenuePublicResponse applyEnrichmentPatches(UUID id, List<VenueDtos.VenueEnrichmentSuggestion> patches);
 }

@@ -32,59 +32,47 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * AI-assisted venue profile enrichment — translates a tenant's free-text description of their
- * venue into a human-readable reply and a list of structured {@code metadata.items} patches the
- * UI can apply directly via {@code PATCH /{venueId}/metadata}.
+ * AI-assisted single-field extraction for the venue "fill from source" flow.
  *
- * <p>The model is asked to return both a conversational answer and a structured patch list in a
- * single call. Structured output follows the same degradation contract as {@link VenueQueryPlanner}:
- * any failure (model unreachable, malformed output, feature disabled) falls back to a plain-text
- * reply with an empty patch list rather than surfacing an error to the tenant UI.
+ * <p>The venue metadata schema is strictly predefined, so a free-form chat is not useful. Instead
+ * the tenant picks one concrete {@code metadata.items} row ({@code group}/{@code field}) and one
+ * preloaded source document ({@code sourceTextId}) — the raw text extracted from the venue's PDF —
+ * and the model extracts just that one value from that one source, constrained to the field's
+ * declared type and allowed values.
  *
- * <p>The current venue name, city, and the earliest linked text-content row (the original
- * document from which the venue was created, when available) are loaded from {@link VenueService}
- * and {@link VenueTextContentService} and injected into the system prompt so the model has rich
- * source context even when the caller omits {@code currentMetadata}.
+ * <p>Structured output follows the same degradation contract as {@link VenueQueryPlanner}: any
+ * failure (model unreachable, malformed output, feature disabled, no source text, source not owned
+ * by the venue) returns {@code found=false} rather than surfacing an error to the tenant UI.
  */
 @Service
 class VenueEnrichmentAssistantService {
 
   private static final Logger log = LoggerFactory.getLogger(VenueEnrichmentAssistantService.class);
 
-  private static final int MAX_MESSAGE_CHARS = 1000;
+  /** Source documents can be long; cap what is sent to the model to bound the prompt size. */
+  private static final int MAX_SOURCE_CHARS = 6000;
 
   private static final String SYSTEM_PROMPT = """
-      You are a venue profile assistant helping a venue manager fill in their venue's catalog data.
-      The venue is named "%s" and is located in "%s".
+      You are a venue catalog data extraction assistant. You are given the raw source text of a
+      venue's document and must extract exactly ONE catalog field from it.
 
+      Field to extract:
+      - group: %s
+      - field: %s
+      - label: %s
+      - expected value type: %s
+      %s
       %s
 
-      The tenant has described their venue or asked a question. Your job is to:
-      1. Reply conversationally to help them understand what profile fields to fill in.
-      2. Extract structured field suggestions from their description that map to the metadata schema.
+      Rules:
+      - Use ONLY the source text in the user message. Never invent a value that is not stated there.
+      - For enumerated fields the value MUST be exactly one of the allowed values listed above.
+      - For numeric fields return only the number, with no units or thousands separators.
+      - For boolean fields return "true" or "false".
+      - If the source text does not state a value for this field, set found to false and leave value empty.
+      - "evidence" must be the exact sentence or phrase copied verbatim from the source text that the
+        value came from.
 
-      The metadata schema uses a flat items array. Each item has:
-      - group: one of [venue_type, capacity, catering, amenities, accessibility]
-      - field: the specific field within the group
-      - value: the suggested value as a string
-
-      Known fields per group:
-      - venue_type / venue_type: one of [Restaurant, Hotel, Bar or lounge, Rooftop, Gallery,
-        Warehouse or industrial space, Studio, Outdoor garden or terrace,
-        Town hall or community centre, Conference centre, Stadium or arena, Museum,
-        Theatre or cinema, Boat or yacht, Marquee, tipi or barn, Park, zoo or gardens,
-        Place of worship, Private members club, Nightclub, Historic house or estate,
-        Beach or coastal venue, Unclassified]
-      - capacity / max_total: maximum total guest capacity as a number
-      - capacity / min_total: minimum total guest capacity as a number
-      - catering / policy: one of [In-house catering only, External catering only,
-        In-house and external catering both allowed, Catering not specified]
-      - amenities / amenities: comma-separated list of amenity keywords
-      - accessibility / ada_compliant: true or false
-
-      %s
-
-      Only suggest fields you can derive with reasonable confidence from the tenant's message.
       Return ONLY the JSON object described by the format instructions — no extra text.
       """;
 
@@ -92,8 +80,8 @@ class VenueEnrichmentAssistantService {
    * Tolerant mapper — same configuration as {@link VenueQueryPlanner#QUERY_PLAN_CONVERTER} to
    * handle stray tokens small models append after the JSON object.
    */
-  private static final BeanOutputConverter<EnrichmentPlan> ENRICHMENT_PLAN_CONVERTER =
-      new BeanOutputConverter<>(EnrichmentPlan.class, JsonMapper.builder()
+  private static final BeanOutputConverter<ExtractionResult> EXTRACTION_CONVERTER =
+      new BeanOutputConverter<>(ExtractionResult.class, JsonMapper.builder()
           .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
               DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build());
@@ -114,98 +102,127 @@ class VenueEnrichmentAssistantService {
   }
 
   /**
-   * Produces enrichment suggestions for {@code venueId} based on the tenant's {@code request}.
+   * Extracts the single field named in {@code request} from the chosen source document.
    *
-   * <p>Loads the venue and the earliest linked text-content row (the original source document
-   * when available) to give the model richer context. When the chat model is unavailable or
-   * feature-flagged off, returns a fixed fallback reply and an empty patch list so the UI
+   * <p>Loads the venue (404 via {@link VenueNotFoundException} when absent) and the requested
+   * text-content row, then asks the model for one value constrained to the field's type and
+   * allowed values. When the chat model is unavailable or feature-flagged off, when the source
+   * cannot be resolved, or when the model reports no match, returns {@code found=false} so the UI
    * degrades gracefully.
    *
-   * @param venueId owning venue — used to load name, city and source text for the system prompt
-   * @param request the tenant's message, optional field hint, and optional current metadata
-   * @return reply text and structured patch suggestions (may be empty)
+   * @param venueId owning venue — the source row must belong to it
+   * @param request the concrete field to fill and the chosen source document
+   * @return the extracted value plus verbatim evidence, or {@code found=false}
    */
-  public VenueDtos.VenueEnrichmentSuggestionResponse suggest(
+  public VenueDtos.VenueFieldExtractionResponse extract(
       final UUID venueId,
-      final VenueDtos.VenueEnrichmentSuggestionRequest request) {
+      final VenueDtos.VenueFieldExtractionRequest request) {
 
     final ChatClient.Builder builder = chatClientBuilder.getIfAvailable();
     if (!properties.enabled() || builder == null) {
-      log.info("Venue enrichment assistant is disabled or chat model unavailable, venueId={}", venueId);
-      return fallback();
+      log.info("Venue field extraction is disabled or chat model unavailable, venueId={}", venueId);
+      return notFound(request, null);
     }
 
-    final VenueDtos.VenuePublicResponse venue = venueService.getPublicVenue(venueId);
-    final String name = Objects.toString(venue.name(), "this venue");
-    final String city = Objects.toString(venue.city(), "an unspecified city");
+    // Resolves the venue in the active tenant schema — throws VenueNotFoundException when absent.
+    venueService.getPublicVenue(venueId);
 
-    final String sourceContext = resolveSourceContext(venueId);
-    final String fieldContext = request.fieldHint() != null
-        ? "The tenant is specifically asking about the '" + request.fieldHint() + "' field group."
-        : "";
-    final String metadataContext = request.currentMetadata() != null
-        ? "Current metadata (already filled): " + truncate(request.currentMetadata(), 2000)
-        : "";
-    final String contextBlock = (fieldContext + "\n" + metadataContext).strip();
+    final String sourceText = resolveSourceText(venueId, request.sourceTextId());
+    if (sourceText == null || sourceText.isBlank()) {
+      log.info("No source text available for field extraction, venueId={}, field={}.{}",
+          venueId, request.group(), request.field());
+      return notFound(request, null);
+    }
 
-    final String systemPrompt = SYSTEM_PROMPT.formatted(name, city, sourceContext, contextBlock);
-    final String userMessage = truncate(request.message(), MAX_MESSAGE_CHARS);
+    final String systemPrompt = SYSTEM_PROMPT.formatted(
+        request.group(),
+        request.field(),
+        Objects.toString(request.fieldLabel(), request.field()),
+        Objects.toString(request.valueType(), "text"),
+        allowedValuesBlock(request.allowedValues()),
+        currentValueBlock(request.currentValue()));
 
     try {
-      final EnrichmentPlan plan = builder.build().prompt()
-          .system(systemPrompt + "\n" + ENRICHMENT_PLAN_CONVERTER.getFormat())
-          .user(userMessage)
+      final ExtractionResult result = builder.build().prompt()
+          .system(systemPrompt + "\n" + EXTRACTION_CONVERTER.getFormat())
+          .user(truncate(sourceText, MAX_SOURCE_CHARS))
           .call()
-          .entity(ENRICHMENT_PLAN_CONVERTER);
+          .entity(EXTRACTION_CONVERTER);
 
-      if (plan == null || plan.reply() == null || plan.reply().isBlank()) {
-        log.warn("Venue enrichment model returned empty plan, venueId={}", venueId);
-        return fallback();
+      if (result == null
+          || !Boolean.TRUE.equals(result.found())
+          || result.value() == null
+          || result.value().isBlank()) {
+        log.info("Venue field extraction found no value, venueId={}, field={}.{}",
+            venueId, request.group(), request.field());
+        return notFound(request, result == null ? null : result.evidence());
       }
 
-      final List<VenueDtos.VenueEnrichmentSuggestion> patches = plan.suggestedPatches() == null
-          ? List.of()
-          : plan.suggestedPatches().stream()
-              .filter(p -> p.group() != null && p.field() != null && p.value() != null)
-              .toList();
-
-      log.info("Venue enrichment produced {} suggestion(s), venueId={}", patches.size(), venueId);
-      return new VenueDtos.VenueEnrichmentSuggestionResponse(plan.reply(), patches);
+      log.info("Venue field extraction found a value, venueId={}, field={}.{}",
+          venueId, request.group(), request.field());
+      return new VenueDtos.VenueFieldExtractionResponse(
+          request.group(),
+          request.field(),
+          result.value().strip(),
+          result.evidence() == null ? "" : result.evidence().strip(),
+          true);
 
     } catch (final RuntimeException ex) {
-      log.warn("Venue enrichment assistant failed, returning fallback: venueId={}, error={}",
+      log.warn("Venue field extraction failed, returning not-found: venueId={}, error={}",
           venueId, ex.getMessage());
-      return fallback();
+      return notFound(request, null);
     }
   }
 
   /**
-   * Loads the earliest text-content row linked to {@code venueId} and returns a prompt snippet
-   * containing the original source text. Returns an empty string when no rows exist, so the
-   * prompt slot is simply blank and the model proceeds without it.
+   * Returns the content of the chosen source row, or the earliest row when no explicit choice was
+   * made. Returns {@code null} when the venue has no rows or the requested row does not belong to
+   * the venue — the row is resolved from the venue's own rows so ownership is enforced.
    */
-  private String resolveSourceContext(final UUID venueId) {
+  private String resolveSourceText(final UUID venueId, final UUID sourceTextId) {
     try {
       final var rows = venueTextContentService.listByVenue(venueId).items();
       if (rows.isEmpty()) {
-        return "";
+        return null;
       }
-      // The list is ordered by created_at ascending — the first row is the original source.
-      final String sourceText = rows.get(0).content();
-      return "Original source document (extracted at venue creation):\n"
-             + truncate(sourceText, 3000);
+      if (sourceTextId == null) {
+        // The list is ordered by created_at ascending — the first row is the original source.
+        return rows.get(0).content();
+      }
+      return rows.stream()
+          .filter(row -> sourceTextId.equals(row.id()))
+          .map(row -> row.content())
+          .findFirst()
+          .orElse(null);
     } catch (final RuntimeException ex) {
-      log.debug("Could not load text content for venue enrichment context, venueId={}: {}",
+      log.debug("Could not load text content for field extraction, venueId={}: {}",
           venueId, ex.getMessage());
-      return "";
+      return null;
     }
   }
 
-  private static VenueDtos.VenueEnrichmentSuggestionResponse fallback() {
-    return new VenueDtos.VenueEnrichmentSuggestionResponse(
-        "AI enrichment assistance is currently unavailable. "
-        + "Please fill in the venue profile fields manually.",
-        List.of());
+  private static String allowedValuesBlock(final List<String> allowedValues) {
+    if (allowedValues == null || allowedValues.isEmpty()) {
+      return "";
+    }
+    return "- allowed values (choose exactly one): " + String.join(", ", allowedValues);
+  }
+
+  private static String currentValueBlock(final String currentValue) {
+    if (currentValue == null || currentValue.isBlank()) {
+      return "";
+    }
+    return "- currently stored value (may be empty or outdated): " + currentValue;
+  }
+
+  private static VenueDtos.VenueFieldExtractionResponse notFound(
+      final VenueDtos.VenueFieldExtractionRequest request, final String evidence) {
+    return new VenueDtos.VenueFieldExtractionResponse(
+        request.group(),
+        request.field(),
+        null,
+        evidence,
+        false);
   }
 
   private static String truncate(final String value, final int max) {
@@ -213,12 +230,10 @@ class VenueEnrichmentAssistantService {
   }
 
   /**
-   * Internal model output record — deserialized from the chat model's JSON reply.
-   * Not exposed outside this service; the controller-facing type is
-   * {@link VenueDtos.VenueEnrichmentSuggestionResponse}.
+   * Internal model output record — deserialized from the chat model's JSON reply. Not exposed
+   * outside this service; the controller-facing type is
+   * {@link VenueDtos.VenueFieldExtractionResponse}.
    */
-  private record EnrichmentPlan(
-      String reply,
-      List<VenueDtos.VenueEnrichmentSuggestion> suggestedPatches) {
+  private record ExtractionResult(String value, String evidence, Boolean found) {
   }
 }

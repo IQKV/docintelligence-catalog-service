@@ -272,59 +272,45 @@ public final class VenueDtos {
                                                   VenueSemanticSearchFilters appliedFilters) {
   }
 
-  /**
-   * Request body for the enrichment apply endpoint — a list of AI-suggested patches to merge
-   * atomically into the venue's current metadata document.
-   *
-   * <p>Each item maps to one {@code metadata.items} row using the same {@code group}/{@code field}
-   * addressing as the ingestion worker and the enrichment suggestions endpoint. The server reads
-   * the current document, removes any existing row for each {@code group}/{@code field} pair, and
-   * appends the new value — identical to the client-side {@code setFieldValue} merge but
-   * performed in one transaction so concurrent edits cannot race.
-   */
-  public record VenueEnrichmentApplyRequest(
-      @NotEmpty List<VenueEnrichmentSuggestion> patches) {
-  }
-
-  // ─── Enrichment assistant ─────────────────────────────────────────────────
+  // ─── Field extraction (fill-from-source) ──────────────────────────────────
 
   /**
-   * Request body for the AI-assisted venue profile enrichment endpoint.
+   * Request body for the single-field extraction endpoint.
    *
-   * <p>{@code message} is the tenant's free-text question or description (e.g. "We're a 500-seat
-   * rooftop bar in London with in-house catering"). {@code fieldHint} optionally scopes the
-   * assistant's reply to one metadata group (e.g. {@code capacity}, {@code amenities}). {@code
-   * currentMetadata} optionally carries the venue's current serialised metadata document so the
-   * assistant can avoid re-suggesting already-filled fields.
+   * <p>The tenant picks one concrete {@code metadata.items} row ({@code group}/{@code field}) and
+   * one preloaded source document ({@code sourceTextId}) — the raw text extracted from the venue's
+   * PDF. The assistant finds the matching value inside that text and returns it verbatim; there is
+   * no free-form chat and no field list, because the venue metadata schema is strictly predefined.
+   *
+   * <p>{@code fieldLabel}, {@code valueType} and {@code allowedValues} come from the front-end
+   * metadata spec and constrain the extraction: enumerated fields must resolve to one of the
+   * allowed values, numeric fields to a number. {@code currentValue} is the value currently stored
+   * in the row, when any, so the model can judge whether the source refines it.
    */
-  public record VenueEnrichmentSuggestionRequest(
-      @NotBlank String message,
-      String fieldHint,
-      String currentMetadata) {
+  public record VenueFieldExtractionRequest(
+      @NotBlank String group,
+      @NotBlank String field,
+      String fieldLabel,
+      String valueType,
+      List<String> allowedValues,
+      UUID sourceTextId,
+      String currentValue) {
   }
 
   /**
-   * A single structured field suggestion that maps directly onto the {@code metadata.items} array
-   * shape, so the UI can apply it immediately via {@code PATCH /{venueId}/metadata}.
+   * A single-field extraction result.
    *
-   * @param group the metadata group key (e.g. {@code capacity}, {@code venue_type})
-   * @param field the field key within the group (e.g. {@code max_total}, {@code venue_type})
-   * @param value the suggested value as a string; numeric values are expressed as strings here
-   *              and the UI is responsible for coercing the type when building the metadata patch
+   * <p>{@code found} is {@code false} when the source text carries no value for the field, when the
+   * chosen source does not belong to the venue, or when the AI feature is disabled / the model is
+   * unreachable — the endpoint never errors on those, it degrades to {@code found=false}. {@code
+   * evidence} is the verbatim excerpt from the source the value was taken from, so the tenant can
+   * verify the match before applying it.
    */
-  public record VenueEnrichmentSuggestion(String group, String field, String value) {
-  }
-
-  /**
-   * Response from the AI-assisted venue profile enrichment endpoint.
-   *
-   * <p>{@code reply} is the human-readable answer rendered in the tenant UI chat widget.
-   * {@code suggestedPatches} carries the structured field suggestions extracted from the reply;
-   * it may be empty when the model cannot produce structured output — the assistant always
-   * degrades gracefully to {@code reply}-only rather than failing.
-   */
-  public record VenueEnrichmentSuggestionResponse(
-      String reply,
-      List<VenueEnrichmentSuggestion> suggestedPatches) {
+  public record VenueFieldExtractionResponse(
+      String group,
+      String field,
+      String value,
+      String evidence,
+      boolean found) {
   }
 }

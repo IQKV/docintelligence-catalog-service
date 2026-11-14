@@ -33,8 +33,8 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * Unit tests for the degradation contract of {@link VenueEnrichmentAssistantService}: when the
- * chat model is unavailable or the feature flag is off, the service must return a non-empty
- * fallback reply and an empty patch list rather than propagating an error.
+ * chat model is unavailable or the feature flag is off, the service must return {@code found=false}
+ * rather than propagating an error.
  *
  * <p>The LLM-backed happy path is not exercised here — it requires a live Ollama instance and is
  * covered by integration tests.
@@ -54,38 +54,39 @@ class VenueEnrichmentAssistantServiceTest {
 
   private static final UUID VENUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-  private static final VenueDtos.VenueEnrichmentSuggestionRequest REQUEST =
-      new VenueDtos.VenueEnrichmentSuggestionRequest(
-          "We're a 300-person rooftop bar with in-house catering", null, null);
+  private static final VenueDtos.VenueFieldExtractionRequest REQUEST =
+      new VenueDtos.VenueFieldExtractionRequest(
+          "capacity", "max_total", "Maximum capacity", "number", null, null, null);
 
   @Test
-  @DisplayName("returns fallback when feature flag is disabled")
-  void returnsFallbackWhenDisabled() {
+  @DisplayName("returns not-found when feature flag is disabled")
+  void returnsNotFoundWhenDisabled() {
     // Arrange
     final var properties = new MasterVenueAiSearchProperties(false);
     final var service = new VenueEnrichmentAssistantService(venueService, venueTextContentService, chatClientBuilderProvider, properties);
 
     // Act
-    final var response = service.suggest(VENUE_ID, REQUEST);
+    final var response = service.extract(VENUE_ID, REQUEST);
 
     // Assert
-    assertThat(response.reply()).isNotBlank();
-    assertThat(response.suggestedPatches()).isEmpty();
+    assertThat(response.found()).isFalse();
+    assertThat(response.value()).isNull();
+    assertThat(response.group()).isEqualTo("capacity");
   }
 
   @Test
-  @DisplayName("returns fallback when no chat client is available")
-  void returnsFallbackWhenNoChatClient() {
+  @DisplayName("returns not-found when no chat client is available")
+  void returnsNotFoundWhenNoChatClient() {
     // Arrange
     final var properties = new MasterVenueAiSearchProperties(true);
     when(chatClientBuilderProvider.getIfAvailable()).thenReturn(null);
     final var service = new VenueEnrichmentAssistantService(venueService, venueTextContentService, chatClientBuilderProvider, properties);
 
     // Act
-    final var response = service.suggest(VENUE_ID, REQUEST);
+    final var response = service.extract(VENUE_ID, REQUEST);
 
     // Assert
-    assertThat(response.reply()).isNotBlank();
-    assertThat(response.suggestedPatches()).isEmpty();
+    assertThat(response.found()).isFalse();
+    assertThat(response.value()).isNull();
   }
 }

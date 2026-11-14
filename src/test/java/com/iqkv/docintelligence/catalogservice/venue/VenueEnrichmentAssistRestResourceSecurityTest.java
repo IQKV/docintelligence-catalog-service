@@ -36,21 +36,21 @@ import org.springframework.web.context.WebApplicationContext;
 /**
  * Security contract for {@link VenueEnrichmentAssistRestResource}.
  *
- * <p>Verifies that the enrichment suggestions endpoint enforces the same tenant-scoped auth
- * contract as the rest of the venue surface: anonymous callers are rejected (401), callers
- * without a resolved tenant are rejected (400), and callers without {@code TENANT_OWNER} or
- * {@code MEMBER} authority are rejected (403).
+ * <p>Verifies that the field-extraction endpoint enforces the same tenant-scoped auth contract as
+ * the rest of the venue surface: anonymous callers are rejected (401), callers without a resolved
+ * tenant are rejected (400), and callers without {@code TENANT_OWNER} or {@code MEMBER} authority
+ * are rejected (403).
  */
 @SpringBootTest(classes = {CatalogServiceApplication.class})
 @ActiveProfiles("test")
 class VenueEnrichmentAssistRestResourceSecurityTest {
 
-  private static final String SUGGESTIONS_PATH =
-      "/api/v1/catalog/venues/00000000-0000-0000-0000-000000000001/enrichment/suggestions";
+  private static final String EXTRACT_PATH =
+      "/api/v1/catalog/venues/00000000-0000-0000-0000-000000000001/enrichment/extract";
   private static final String TENANT_HEADER = "X-Tenant-ID";
   private static final String TENANT_KEY = "xk7f2b9a";
   private static final String VALID_BODY = """
-      {"message":"We are a rooftop bar in central London"}
+      {"group":"capacity","field":"max_total"}
       """;
 
   @Autowired
@@ -66,18 +66,18 @@ class VenueEnrichmentAssistRestResourceSecurityTest {
   }
 
   @Test
-  @DisplayName("Enrichment suggestions endpoint requires a resolved tenant identifier")
+  @DisplayName("Extract endpoint requires a resolved tenant identifier")
   void rejectsMissingTenant() throws Exception {
-    mockMvc.perform(post(SUGGESTIONS_PATH)
+    mockMvc.perform(post(EXTRACT_PATH)
             .contentType(MediaType.APPLICATION_JSON)
             .content(VALID_BODY))
         .andExpect(status().isBadRequest());
   }
 
   @Test
-  @DisplayName("Enrichment suggestions endpoint rejects anonymous caller")
+  @DisplayName("Extract endpoint rejects anonymous caller")
   void rejectsAnonymous() throws Exception {
-    mockMvc.perform(post(SUGGESTIONS_PATH)
+    mockMvc.perform(post(EXTRACT_PATH)
             .header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON)
             .content(VALID_BODY))
@@ -86,9 +86,9 @@ class VenueEnrichmentAssistRestResourceSecurityTest {
 
   @Test
   @WithMockUser(authorities = "PLATFORM_ADMIN")
-  @DisplayName("Enrichment suggestions endpoint rejects PLATFORM_ADMIN — tenant surface only")
+  @DisplayName("Extract endpoint rejects PLATFORM_ADMIN — tenant surface only")
   void rejectsPlatformAdmin() throws Exception {
-    mockMvc.perform(post(SUGGESTIONS_PATH)
+    mockMvc.perform(post(EXTRACT_PATH)
             .header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON)
             .content(VALID_BODY))
@@ -97,64 +97,13 @@ class VenueEnrichmentAssistRestResourceSecurityTest {
 
   @Test
   @WithMockUser(authorities = "MEMBER")
-  @DisplayName("Enrichment suggestions endpoint rejects a blank message")
-  void rejectsBlankMessage() throws Exception {
-    mockMvc.perform(post(SUGGESTIONS_PATH)
+  @DisplayName("Extract endpoint rejects a blank field address")
+  void rejectsBlankField() throws Exception {
+    mockMvc.perform(post(EXTRACT_PATH)
             .header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
-                {"message":""}
-                """))
-        .andExpect(status().isBadRequest());
-  }
-
-  // ─── /apply ──────────────────────────────────────────────────────────────
-
-  private static final String APPLY_PATH =
-      "/api/v1/catalog/venues/00000000-0000-0000-0000-000000000001/enrichment/apply";
-  private static final String VALID_APPLY_BODY = """
-      {"patches":[{"group":"venue_type","field":"venue_type","value":"Rooftop"}]}
-      """;
-
-  @Test
-  @DisplayName("Apply endpoint requires a resolved tenant identifier")
-  void applyRejectsMissingTenant() throws Exception {
-    mockMvc.perform(post(APPLY_PATH)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(VALID_APPLY_BODY))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  @DisplayName("Apply endpoint rejects anonymous caller")
-  void applyRejectsAnonymous() throws Exception {
-    mockMvc.perform(post(APPLY_PATH)
-            .header(TENANT_HEADER, TENANT_KEY)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(VALID_APPLY_BODY))
-        .andExpect(status().isUnauthorized());
-  }
-
-  @Test
-  @WithMockUser(authorities = "PLATFORM_ADMIN")
-  @DisplayName("Apply endpoint rejects PLATFORM_ADMIN — tenant surface only")
-  void applyRejectsPlatformAdmin() throws Exception {
-    mockMvc.perform(post(APPLY_PATH)
-            .header(TENANT_HEADER, TENANT_KEY)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(VALID_APPLY_BODY))
-        .andExpect(status().isForbidden());
-  }
-
-  @Test
-  @WithMockUser(authorities = "MEMBER")
-  @DisplayName("Apply endpoint rejects empty patches list")
-  void applyRejectsEmptyPatches() throws Exception {
-    mockMvc.perform(post(APPLY_PATH)
-            .header(TENANT_HEADER, TENANT_KEY)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"patches":[]}
+                {"group":"capacity","field":""}
                 """))
         .andExpect(status().isBadRequest());
   }
