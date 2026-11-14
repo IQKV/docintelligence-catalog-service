@@ -50,7 +50,7 @@ class VenueEnrichmentAssistantService {
   private static final Logger log = LoggerFactory.getLogger(VenueEnrichmentAssistantService.class);
 
   /** Source documents can be long; cap what is sent to the model to bound the prompt size. */
-  private static final int MAX_SOURCE_CHARS = 6000;
+  private static final int MAX_SOURCE_CHARS = 8_000;
 
   private static final String SYSTEM_PROMPT = """
       You are a venue catalog data extraction assistant. You are given the raw source text of a
@@ -226,7 +226,16 @@ class VenueEnrichmentAssistantService {
   }
 
   private static String truncate(final String value, final int max) {
-    return value.length() > max ? value.substring(0, max) : value;
+    if (value.length() <= max) {
+      return value;
+    }
+    // Walk back from the cap to the nearest whitespace so we don't cut mid-word,
+    // matching DocumentClassifier#truncate in docintelligence-catalog-processing-worker.
+    int cut = max;
+    while (cut > 0 && !Character.isWhitespace(value.charAt(cut))) {
+      cut--;
+    }
+    return cut > 0 ? value.substring(0, cut) : value.substring(0, max);
   }
 
   /**
