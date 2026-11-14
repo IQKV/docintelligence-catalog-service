@@ -283,6 +283,7 @@ public final class VenueDtos {
       @NotBlank String field,
       @NotBlank String value) {
   }
+
   /**
    * Request body for the apply endpoint — a list of accepted field patches to merge into the
    * venue metadata document.
