@@ -10,7 +10,7 @@ This template provides:
 - **Venue asset uploads** — two-phase presigned MinIO upload for venue photos and attachments (initiate → direct upload → confirm) nested under the owning venue, with tenant and admin surfaces mirrored
 - **Venue asset import** — venue-less document upload (PDF/CSV/image) that the processing worker turns into a venue record; the client polls the asset until its derived venue is linked
 - **Venue text contents** — raw/markdown text chunks extracted from venue sources, with keyword and semantic search plus venue linking, on both the tenant and admin surfaces
-- **AI venue enrichment** — "Fill with AI" assistant that turns a tenant's free-text description into a reply plus structured `metadata.items` suggestions the UI can apply
+- **AI venue enrichment** — "fill from source" assistant that extracts one concrete `metadata.items` field from a preloaded venue source document for the UI to review and apply
 - **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
 - **Ollama connectivity** — LLM client wired to a local Ollama instance via `spring.ai.ollama.*` (base URL and model configurable per environment)
 - **Object storage** — MinIO (S3-compatible) client bound to a private `catalog-assets` bucket, served to clients through presigned URLs
@@ -111,12 +111,13 @@ The status lifecycle is `UPLOADED` → `PARSING` → `EXTRACTED` (the derived ve
 
 ### Venue enrichment
 
-AI-assisted venue profile enrichment for the tenant UI "Fill with AI" flow. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. When the chat model is unreachable or the AI feature flag is off, `suggestions` still returns `200` with a plain-text fallback reply and an empty patch list.
+AI-assisted single-field extraction for the tenant UI "fill from source" flow. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. The tenant picks one concrete `metadata.items` row plus one preloaded source document, and the endpoint returns the value found for that field. When the chat model is unreachable or the AI feature flag is off, `extract` still returns `200` with `found=false`.
 
-| Method | Path                                       | Auth                        | Description                                                                                                                           |
-| :----- | :----------------------------------------- | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST` | `/venues/{venueId}/enrichment/suggestions` | JWT `TENANT_OWNER`/`MEMBER` | Send a free-text `message` (optional `fieldHint`, `currentMetadata`); receive a reply plus `metadata.items` suggestions               |
-| `POST` | `/venues/{venueId}/enrichment/apply`       | JWT `TENANT_OWNER`/`MEMBER` | Merge patches atomically into the metadata document (existing group/field rows replaced, absent ones appended); triggers re-embedding |
+| Method | Path                                   | Auth                        | Description                                                                                                                                                                                    |
+| :----- | :------------------------------------- | :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/venues/{venueId}/enrichment/extract` | JWT `TENANT_OWNER`/`MEMBER` | Extract one `group`/`field` value from the chosen `sourceTextId`, constrained to the field's `valueType`/`allowedValues`; returns the value plus verbatim evidence (`found=false` when absent) |
+
+Applying an extracted value is done through `PATCH /venues/{venueId}/metadata`.
 
 ### Venue text contents
 

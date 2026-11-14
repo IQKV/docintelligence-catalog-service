@@ -131,14 +131,13 @@ A confirmed import carries the processing status `UPLOADED`, then `PARSING`, and
 
 ### Venue Enrichment (Tenant Surface)
 
-AI-assisted venue profile enrichment — the tenant UI "Fill with AI" flow. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim. The endpoints degrade gracefully: when the chat model is unreachable or the AI feature flag is off, `suggestions` still returns `200` with a plain-text fallback reply and an empty `suggestedPatches` list.
+AI-assisted single-field extraction — the tenant UI "fill from source" flow. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim. The tenant picks one concrete `metadata.items` row plus one preloaded source document, and the endpoint returns the value found for that field. It degrades gracefully: when the chat model is unreachable, the AI feature flag is off, or the source holds no value for the field, it still returns `200` with `found=false`.
 
-| Method | Path                                       | Auth                        | Description                                                                                                                                                                                                        |
-| ------ | ------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST` | `/venues/{venueId}/enrichment/suggestions` | JWT `TENANT_OWNER`/`MEMBER` | Send a free-text `message` (optional `fieldHint`, `currentMetadata`) and receive a conversational `reply` plus `suggestedPatches` addressing `metadata.items` rows                                                 |
-| `POST` | `/venues/{venueId}/enrichment/apply`       | JWT `TENANT_OWNER`/`MEMBER` | Merge the supplied `patches` atomically into the venue's metadata document — existing rows for the same group/field are replaced, absent ones appended; triggers re-embedding; returns the updated safe projection |
+| Method | Path                                   | Auth                        | Description                                                                                                                                                                                        |
+| ------ | -------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/venues/{venueId}/enrichment/extract` | JWT `TENANT_OWNER`/`MEMBER` | Extract one `group`/`field` value from the chosen `sourceTextId`, constrained to the field's `valueType`/`allowedValues`; returns the extracted `value` plus verbatim `evidence`, or `found=false` |
 
-Each suggestion addresses one `metadata.items` row by `group`/`field`. Both paths answer `400` on validation failure, `401` for a missing or invalid JWT, `403` when the caller lacks the required authority, and `404` when the venue does not exist in the tenant schema.
+The chosen `sourceTextId` must belong to the venue — the row is resolved from the venue's own text-content rows. Applying an extracted value is done through `PATCH /venues/{venueId}/metadata`, not through this surface. The path answers `400` on validation failure, `401` for a missing or invalid JWT, `403` when the caller lacks the required authority, and `404` when the venue does not exist in the tenant schema.
 
 ---
 
