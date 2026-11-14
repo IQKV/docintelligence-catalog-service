@@ -273,6 +273,23 @@ public final class VenueDtos {
   }
 
   // ─── Field extraction (fill-from-source) ──────────────────────────────────
+  /**
+   * One AI-suggested metadata field patch — mirrors the front-end VenueEnrichmentSuggestion.
+   * Used by the {@code /enrichment/apply} endpoint to merge accepted suggestions into the
+   * venue's metadata document.
+   */
+  public record VenueEnrichmentSuggestion(
+      @NotBlank String group,
+      @NotBlank String field,
+      @NotBlank String value) {
+  }
+  /**
+   * Request body for the apply endpoint — a list of accepted field patches to merge into the
+   * venue metadata document.
+   */
+  public record VenueEnrichmentApplyRequest(
+      @NotEmpty List<VenueEnrichmentSuggestion> patches) {
+  }
 
   /**
    * Request body for the single-field extraction endpoint.
