@@ -38,6 +38,7 @@ public final class VenueTextContentDtos {
       UUID id,
       UUID venueId,
       UUID sourceAssetId,
+      String label,
       String content,
       Instant createdAt,
       Instant updatedAt) {
@@ -55,10 +56,12 @@ public final class VenueTextContentDtos {
   /**
    * Write payload for {@code POST /} (create). {@code venueId} is optional — the row may be
    * created before the venue exists and linked later. {@code sourceAssetId} is optional provenance.
+   * {@code label} is the optional human-readable name of the source (title or file name).
    */
   public record VenueTextContentWriteRequest(
       UUID venueId,
       UUID sourceAssetId,
+      String label,
       @NotBlank String content) {
   }
 
@@ -68,6 +71,7 @@ public final class VenueTextContentDtos {
    * to set {@code venueId} explicitly.
    */
   public record VenueTextContentPatchRequest(
+      String label,
       String content) {
   }
 
@@ -88,6 +92,7 @@ public final class VenueTextContentDtos {
       UUID id,
       UUID venueId,
       UUID sourceAssetId,
+      String label,
       String content,
       Instant createdAt,
       Instant updatedAt,

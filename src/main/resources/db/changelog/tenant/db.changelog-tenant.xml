@@ -20,5 +20,6 @@
     <include file="db/changelog/tenant/20261112120000-drop-venue-primary-photo-url.xml"/>
     <include file="db/changelog/tenant/20261112130000-create-venue-text-contents.xml"/>
     <include file="db/changelog/tenant/20261114120000-add-venue-description.xml"/>
+    <include file="db/changelog/tenant/20261115120000-add-venue-text-content-label.xml"/>
 
 </databaseChangeLog>

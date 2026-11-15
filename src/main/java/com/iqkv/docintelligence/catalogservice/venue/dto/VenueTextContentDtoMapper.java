@@ -37,6 +37,7 @@ public final class VenueTextContentDtoMapper {
         tc.getId(),
         tc.getVenueId(),
         tc.getSourceAssetId(),
+        tc.getLabel(),
         tc.getContent(),
         tc.getCreatedAt(),
         tc.getUpdatedAt());
@@ -59,6 +60,7 @@ public final class VenueTextContentDtoMapper {
                                 final VenueTextContentDtos.VenueTextContentWriteRequest request) {
     tc.setVenueId(request.venueId());
     tc.setSourceAssetId(request.sourceAssetId());
+    tc.setLabel(request.label());
     tc.setContent(request.content());
   }
 
@@ -67,6 +69,9 @@ public final class VenueTextContentDtoMapper {
    */
   public static void applyPatch(final VenueTextContent tc,
                                 final VenueTextContentDtos.VenueTextContentPatchRequest request) {
+    if (request.label() != null) {
+      tc.setLabel(request.label());
+    }
     if (request.content() != null) {
       tc.setContent(request.content());
     }

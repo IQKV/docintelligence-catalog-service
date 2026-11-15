@@ -58,7 +58,7 @@ public class VenueTextContentServiceImpl implements VenueTextContentService {
   private static final Pattern SAFE_TENANT_KEY = Pattern.compile("^[a-zA-Z0-9_]+$");
 
   private static final String SEARCH_SELECT = """
-      SELECT id, venue_id, source_asset_id, content, created_at, updated_at,
+      SELECT id, venue_id, source_asset_id, label, content, created_at, updated_at,
              1 - (embedding <=> ?::vector) AS similarity
       FROM %s
       WHERE embedding IS NOT NULL
@@ -119,6 +119,9 @@ public class VenueTextContentServiceImpl implements VenueTextContentService {
     final String previousContent = tc.getContent();
     VenueTextContentDtoMapper.applyPatch(tc, request);
     mapper.updateContent(id, tc.getContent());
+    if (request.label() != null) {
+      mapper.updateLabel(id, request.label());
+    }
     if (!tc.getContent().equals(previousContent)) {
       embedQuietly(tc);
     }
@@ -175,6 +178,7 @@ public class VenueTextContentServiceImpl implements VenueTextContentService {
                   UUID.fromString(rs.getString("id")),
                   vid == null ? null : UUID.fromString(vid),
                   said == null ? null : UUID.fromString(said),
+                  rs.getString("label"),
                   rs.getString("content"),
                   toInstant(rs.getTimestamp("created_at")),
                   toInstant(rs.getTimestamp("updated_at")),
