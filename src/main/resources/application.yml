@@ -109,7 +109,7 @@ iqkv:
     region: ${OBJECTSTORAGE_REGION:us-east-1}
     ssl: ${OBJECTSTORAGE_SSL:false}
     upload:
-      max-file-size-bytes: ${OBJECTSTORAGE_UPLOAD_MAX_FILE_SIZE_BYTES:5242880}
+      max-file-size-bytes: ${OBJECTSTORAGE_UPLOAD_MAX_FILE_SIZE_BYTES:20971520}
       presigned-url-expiration-minutes: ${OBJECTSTORAGE_UPLOAD_PRESIGNED_URL_EXPIRATION_MINUTES:60}
       allowed-mime-types: ${OBJECTSTORAGE_UPLOAD_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/webp,image/tiff,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
   platform:
