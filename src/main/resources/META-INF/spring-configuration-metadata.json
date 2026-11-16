@@ -274,7 +274,7 @@
             "name": "iqkv.objectstorage.upload.allowed-mime-types",
             "type": "java.util.List<java.lang.String>",
             "description": "Comma-separated list of accepted MIME types. Uploads with a Content-Type not in this list are rejected.",
-            "defaultValue": "application/pdf,image/jpeg,image/png,image/webp,image/tiff,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "defaultValue": "application/pdf,image/jpeg,image/png,image/webp,image/tiff,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         }
     ],
     "hints": [

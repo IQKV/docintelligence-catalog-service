@@ -111,7 +111,7 @@ iqkv:
     upload:
       max-file-size-bytes: ${OBJECTSTORAGE_UPLOAD_MAX_FILE_SIZE_BYTES:20971520}
       presigned-url-expiration-minutes: ${OBJECTSTORAGE_UPLOAD_PRESIGNED_URL_EXPIRATION_MINUTES:60}
-      allowed-mime-types: ${OBJECTSTORAGE_UPLOAD_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/webp,image/tiff,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
+      allowed-mime-types: ${OBJECTSTORAGE_UPLOAD_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/webp,image/tiff,text/plain,text/markdown,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
   platform:
     # Platform-wide operational mode: MULTI_TENANT (default) or SINGLE_TENANT.
     # Must be the same value across all core services (IAM, Billing, CMS, etc.).
