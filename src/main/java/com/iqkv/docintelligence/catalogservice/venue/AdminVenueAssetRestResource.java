@@ -223,6 +223,32 @@ public class AdminVenueAssetRestResource {
     }
   }
 
+  @GetMapping("/master-photos")
+  @Operation(
+      summary = "List the master-catalog photos of a venue (platform admin)",
+      description = "When the venue is linked to a master-catalog record, returns the photos of "
+                    + "that master venue, ordered by display order — the reference gallery shown "
+                    + "beneath the venue's own photos. Each item includes a time-limited presigned "
+                    + "GET URL in 'sourceUrl'. Returns an empty list when the venue has no master "
+                    + "link.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Master-catalog photos of the venue",
+                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetPublicListResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — PLATFORM_ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueAssetDtos.VenueAssetPublicListResponse> listMasterPhotos(
+      @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId) {
+    try {
+      TenantContext.setCurrentTenant(tenantKey);
+      return ResponseEntity.ok(venueAssetService.listMasterPhotos(venueId));
+    } finally {
+      TenantContext.clear();
+    }
+  }
+
   @DeleteMapping("/{id}")
   @Operation(
       summary = "Delete a venue asset (platform admin)",

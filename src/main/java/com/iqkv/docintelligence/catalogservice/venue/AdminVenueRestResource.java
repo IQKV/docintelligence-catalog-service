@@ -252,4 +252,58 @@ public class AdminVenueRestResource {
       TenantContext.clear();
     }
   }
+
+  @PatchMapping("/{id}/metadata")
+  @Operation(
+      summary = "Update tenant venue metadata (platform admin)",
+      description = "Replaces the metadata document of the given venue with the caller-supplied "
+                    + "full serialised MetadataDocument JSON — no delta merge is performed. All "
+                    + "other venue fields are left untouched. Responds 404 when the venue does not "
+                    + "exist.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Metadata updated",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenuePublicResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Request validation failed", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — PLATFORM_ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenuePublicResponse> patchMetadata(
+      @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @Valid @RequestBody final VenueDtos.VenueMetadataPatchRequest request) {
+    try {
+      TenantContext.setCurrentTenant(tenantKey);
+      return ResponseEntity.ok(venueService.patchVenueMetadata(id, request.metadata()));
+    } finally {
+      TenantContext.clear();
+    }
+  }
+
+  @DeleteMapping
+  @Operation(
+      summary = "Bulk delete tenant venues (platform admin)",
+      description = "Permanently deletes every venue whose id appears in the request body in a "
+                    + "single request. Deletion is idempotent: ids that match no venue are silently "
+                    + "ignored, so repeating the request is safe. The list is capped at 100 ids. "
+                    + "Responds 204 with no body.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "Venues deleted", content = @Content),
+      @ApiResponse(responseCode = "400",
+                   description = "Request validation failed — the id list is empty or holds more than 100 ids",
+                   content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — PLATFORM_ADMIN authority required", content = @Content)
+  })
+  public ResponseEntity<Void> deleteBulk(
+      @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
+      @Valid @RequestBody final VenueDtos.VenueBulkDeleteRequest request) {
+    try {
+      TenantContext.setCurrentTenant(tenantKey);
+      venueService.deletePublicVenues(request.ids());
+      return ResponseEntity.noContent().build();
+    } finally {
+      TenantContext.clear();
+    }
+  }
 }
