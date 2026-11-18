@@ -97,6 +97,20 @@ iqkv:
       # filters. When disabled (or when the Ollama chat model is unreachable) semantic
       # search falls back to embedding the raw query with no hard filters.
       enabled: ${CATALOG_AI_SEARCH_ENABLED:true}
+    venue-ask:
+      # Catalog-native chat / RAG over the tenant's own venue data. When disabled, or when the
+      # Ollama chat model is unreachable, the ask endpoints answer answered=false with the
+      # retrieved sources and the chat endpoints degrade to a canned reply.
+      enabled: ${CATALOG_VENUE_ASK_ENABLED:true}
+      system-prompt: ${CATALOG_VENUE_ASK_SYSTEM_PROMPT:You are the venue catalog assistant for a venue team. Answer using only the CONTEXT provided. If the context does not contain the answer, say you do not know. Never invent venue facts. Cite sources by their label when you use them.}
+      max-input-chars: ${CATALOG_VENUE_ASK_MAX_INPUT_CHARS:4000}
+      max-output-tokens: ${CATALOG_VENUE_ASK_MAX_OUTPUT_TOKENS:1024}
+      temperature: ${CATALOG_VENUE_ASK_TEMPERATURE:0.2}
+      default-model: ${CATALOG_VENUE_ASK_MODEL:${SPRING_AI_OLLAMA_CHAT_OPTIONS_MODEL:llama3.2}}
+      max-context-chars: ${CATALOG_VENUE_ASK_MAX_CONTEXT_CHARS:12000}
+      guard:
+        # Prompt-injection guard for chat / ask input and the output leak check.
+        enabled: ${CATALOG_VENUE_ASK_GUARD_ENABLED:true}
   objectstorage:
     # S3-compatible endpoint — MinIO in SIT/UAT, https://s3.amazonaws.com for AWS S3 in prod.
     endpoint: ${OBJECTSTORAGE_ENDPOINT:http://localhost:9000}

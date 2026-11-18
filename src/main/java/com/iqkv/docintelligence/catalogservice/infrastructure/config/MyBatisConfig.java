@@ -36,7 +36,8 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 @Configuration
 @MapperScan(
     basePackages = {
-        "com.iqkv.docintelligence.venue"
+        "com.iqkv.docintelligence.venue",
+        "com.iqkv.docintelligence.catalogservice.venueask"
     },
     annotationClass = Mapper.class
 )

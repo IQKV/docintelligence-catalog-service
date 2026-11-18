@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Catalog-native AI chat — conversational sessions over the tenant's own venue data,
+         so the venue UI can ask questions and act on the answers.
+
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before
+         these changesets run, so no schemaName is set on the statements below). Tenant scoping
+         is the active schema itself: a session belongs to a user of that tenant and never
+         crosses tenants.
+
+         venue_chat_sessions — one conversation. user_id is the JWT user_id claim; title is set
+         from the first user message. model records the model tag used so a session can resume
+         with the same model.
+
+         venue_chat_messages — the turns of a session, ordered by created_at. role is USER or
+         ASSISTANT (SYSTEM is reserved). No DB-level FK — sessions and their messages are
+         deleted together by the service. -->
+
+    <changeSet id="20261118120000-create-venue-chat" author="iqkv">
+
+        <createTable tableName="venue_chat_sessions">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <!-- JWT user_id claim — the member who owns the conversation. -->
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Set from the first user message; NULL until the first reply is recorded. -->
+            <column name="title" type="VARCHAR(255)"/>
+            <column name="model" type="VARCHAR(128)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="venue_chat_sessions" indexName="idx_vcs_user_id">
+            <column name="user_id"/>
+        </createIndex>
+
+        <createTable tableName="venue_chat_messages">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <!-- App-level reference to venue_chat_sessions.id; no DB-level FK. -->
+            <column name="session_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <!-- USER or ASSISTANT (MessageRole). -->
+            <column name="role" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="venue_chat_messages" indexName="idx_vcm_session_id">
+            <column name="session_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="venue_chat_messages" indexName="idx_vcm_session_id"/>
+            <dropTable tableName="venue_chat_messages"/>
+            <dropIndex tableName="venue_chat_sessions" indexName="idx_vcs_user_id"/>
+            <dropTable tableName="venue_chat_sessions"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

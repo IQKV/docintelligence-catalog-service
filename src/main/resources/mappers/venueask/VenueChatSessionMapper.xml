@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.iqkv.docintelligence.catalogservice.venueask.VenueChatSessionMapper">
+
+  <resultMap id="VenueChatSessionResultMap"
+             type="com.iqkv.docintelligence.catalogservice.venueask.VenueChatSession">
+    <id     property="id"        column="id"         javaType="java.util.UUID"    jdbcType="OTHER"/>
+    <result property="userId"    column="user_id"    javaType="java.util.UUID"    jdbcType="OTHER"/>
+    <result property="title"     column="title"/>
+    <result property="model"     column="model"/>
+    <result property="createdAt" column="created_at" javaType="java.time.Instant" jdbcType="TIMESTAMP"/>
+    <result property="updatedAt" column="updated_at" javaType="java.time.Instant" jdbcType="TIMESTAMP"/>
+  </resultMap>
+
+  <insert id="insert"
+          parameterType="com.iqkv.docintelligence.catalogservice.venueask.VenueChatSession">
+    INSERT INTO venue_chat_sessions (id, user_id, title, model, created_at, updated_at)
+    VALUES (#{id,jdbcType=OTHER}, #{userId,jdbcType=OTHER}, #{title}, #{model},
+            #{createdAt,jdbcType=TIMESTAMP}, #{updatedAt,jdbcType=TIMESTAMP})
+  </insert>
+
+  <update id="update"
+          parameterType="com.iqkv.docintelligence.catalogservice.venueask.VenueChatSession">
+    UPDATE venue_chat_sessions
+    SET title      = #{title},
+        model      = #{model},
+        updated_at = #{updatedAt,jdbcType=TIMESTAMP}
+    WHERE id = #{id,jdbcType=OTHER}
+  </update>
+
+  <delete id="delete">
+    DELETE FROM venue_chat_sessions WHERE id = #{id,jdbcType=OTHER}
+  </delete>
+
+  <select id="findById" resultMap="VenueChatSessionResultMap">
+    SELECT id, user_id, title, model, created_at, updated_at
+    FROM venue_chat_sessions
+    WHERE id = #{id,jdbcType=OTHER}
+  </select>
+
+  <select id="findByUserId" resultMap="VenueChatSessionResultMap">
+    SELECT id, user_id, title, model, created_at, updated_at
+    FROM venue_chat_sessions
+    WHERE user_id = #{userId,jdbcType=OTHER}
+    ORDER BY updated_at DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByUserId" resultType="long">
+    SELECT COUNT(*) FROM venue_chat_sessions WHERE user_id = #{userId,jdbcType=OTHER}
+  </select>
+
+</mapper>
