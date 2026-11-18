@@ -17,10 +17,13 @@
 package com.iqkv.docintelligence.catalogservice.venueask;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAskProperties;
+import com.iqkv.docintelligence.catalogservice.venue.VenueService;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
+import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueAskDtos;
 import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueChatDtoMapper;
 import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueChatDtos;
 import org.slf4j.Logger;
@@ -33,8 +36,10 @@ import org.springframework.stereotype.Service;
  *
  * <p>Every turn runs the same prompt-injection guard as the ask surface, then retrieves the venues
  * the catalogue ranks highest for the message and hands them to {@link VenueAskAssistant} as a
- * grounding block. When retrieval or the model is unavailable the conversation still continues —
- * the turn is answered ungrounded rather than failing.
+ * grounding block. A turn that names a venue is instead grounded in that one venue's profile and
+ * source chunks, so a conversation opened from a venue page stays scoped to it. When retrieval or
+ * the model is unavailable the conversation still continues — the turn is answered ungrounded
+ * rather than failing.
  */
 @Service
 class VenueChatServiceImpl implements VenueChatService {
@@ -46,6 +51,9 @@ class VenueChatServiceImpl implements VenueChatService {
   /** How many catalogue venues are retrieved to ground one chat turn. */
   private static final int GROUNDING_VENUES = 10;
 
+  /** How many source chunks of a single venue are retrieved to ground one chat turn. */
+  private static final int GROUNDING_SOURCES = 6;
+
   /** Returned when no reply could be produced for a turn. */
   static final String UNAVAILABLE_REPLY =
       "I can't answer that from your venue catalogue right now.";
@@ -55,17 +63,20 @@ class VenueChatServiceImpl implements VenueChatService {
   private final VenueContextAssembler contextAssembler;
   private final VenueAskAssistant assistant;
   private final VenueAskProperties properties;
+  private final VenueService venueService;
 
   VenueChatServiceImpl(final VenueChatSessionMapper sessionMapper,
                        final VenueChatMessageMapper messageMapper,
                        final VenueContextAssembler contextAssembler,
                        final VenueAskAssistant assistant,
-                       final VenueAskProperties properties) {
+                       final VenueAskProperties properties,
+                       final VenueService venueService) {
     this.sessionMapper = sessionMapper;
     this.messageMapper = messageMapper;
     this.contextAssembler = contextAssembler;
     this.assistant = assistant;
     this.properties = properties;
+    this.venueService = venueService;
   }
 
   @Override
@@ -84,11 +95,16 @@ class VenueChatServiceImpl implements VenueChatService {
       throw new PromptInjectionException(verdict.rule());
     }
 
+    // Resolved before anything is persisted, so a venue that is unknown in this tenant's schema
+    // leaves no trace of the turn.
+    final VenueDtos.VenuePublicResponse venue = request.venueId() == null
+        ? null : venueService.getPublicVenue(request.venueId());
+
     final VenueChatSession session = resolveSession(userId, request);
     final String userContent = truncate(request.content(), properties.maxInputChars());
     insertMessage(session.getId(), MessageRole.USER, userContent);
 
-    final String reply = reply(userContent, session.getModel());
+    final GroundedReply reply = reply(userContent, venue, session.getModel());
     return recordReply(session, userContent, reply);
   }
 
@@ -149,28 +165,40 @@ class VenueChatServiceImpl implements VenueChatService {
   }
 
   /**
-   * Answers one turn, grounded in the catalogue venues most relevant to the message. A failed
-   * retrieval or model call degrades to {@link #UNAVAILABLE_REPLY} so the conversation continues.
+   * Answers one turn, grounded either in the one venue the turn names or, when it names none, in
+   * the catalogue venues most relevant to the message. A failed retrieval or model call degrades
+   * to {@link #UNAVAILABLE_REPLY} so the conversation continues.
    */
-  private String reply(final String userContent, final String model) {
-    final VenueDtos.VenuePublicSemanticSearchResponse search =
-        contextAssembler.retrieveVenues(userContent, null, GROUNDING_VENUES);
-    final String context = search.items().isEmpty()
-        ? "" : truncate(VenueContextAssembler.renderVenueListBlock(search.items()), properties.maxContextChars());
+  private GroundedReply reply(final String userContent,
+                              final VenueDtos.VenuePublicResponse venue,
+                              final String model) {
+    final String context;
+    final List<VenueAskDtos.VenueAskSource> sources;
+    if (venue == null) {
+      final VenueDtos.VenuePublicSemanticSearchResponse search =
+          contextAssembler.retrieveVenues(userContent, null, GROUNDING_VENUES);
+      context = search.items().isEmpty()
+          ? "" : truncate(VenueContextAssembler.renderVenueListBlock(search.items()), properties.maxContextChars());
+      // The catalogue path cites venues, not source chunks, so there is nothing to return here.
+      sources = List.of();
+    } else {
+      sources = contextAssembler.retrieveSources(venue.id(), userContent, GROUNDING_SOURCES);
+      context = truncate(VenueContextAssembler.renderVenueBlock(venue, sources), properties.maxContextChars());
+    }
 
     final String reply = assistant.reply(userContent, context, model);
     if (reply == null) {
       log.info("Venue chat produced no reply, using the unavailable-reply fallback");
-      return UNAVAILABLE_REPLY;
+      return new GroundedReply(UNAVAILABLE_REPLY, sources);
     }
-    return reply;
+    return new GroundedReply(reply, sources);
   }
 
   /** Stores the assistant turn, refreshes the session and builds the response. */
   private VenueChatDtos.ChatResponse recordReply(final VenueChatSession session, final String userContent,
-                                                 final String reply) {
+                                                 final GroundedReply reply) {
     final Instant now = Instant.now();
-    insertMessage(session.getId(), MessageRole.ASSISTANT, reply);
+    insertMessage(session.getId(), MessageRole.ASSISTANT, reply.text());
 
     session.setUpdatedAt(now);
     if (session.getTitle() == null) {
@@ -178,7 +206,8 @@ class VenueChatServiceImpl implements VenueChatService {
     }
     sessionMapper.update(session);
 
-    return new VenueChatDtos.ChatResponse(session.getId(), session.getTitle(), reply, session.getModel(), now);
+    return new VenueChatDtos.ChatResponse(session.getId(), session.getTitle(), reply.text(), session.getModel(),
+        now, reply.sources());
   }
 
   private void insertMessage(final UUID sessionId, final MessageRole role, final String content) {
@@ -200,5 +229,9 @@ class VenueChatServiceImpl implements VenueChatService {
 
   private boolean guardEnabled() {
     return properties.guard() != null && properties.guard().enabled();
+  }
+
+  /** One answered turn — the reply text and the source chunks it was grounded in. */
+  private record GroundedReply(String text, List<VenueAskDtos.VenueAskSource> sources) {
   }
 }

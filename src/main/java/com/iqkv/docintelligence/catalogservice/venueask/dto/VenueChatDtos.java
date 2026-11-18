@@ -36,11 +36,21 @@ public final class VenueChatDtos {
 
   /**
    * Request to send a message. {@code sessionId} is nullable — null means create a new session.
+   *
+   * @param venueId optional venue to ground this turn on. When present the turn is answered from
+   *                that single venue's profile and source chunks instead of the whole catalogue.
    */
-  public record SendMessageRequest(UUID sessionId, @NotBlank String content, String model) {
+  public record SendMessageRequest(UUID sessionId, UUID venueId, @NotBlank String content, String model) {
   }
 
-  public record ChatResponse(UUID sessionId, String sessionTitle, String reply, String model, Instant timestamp) {
+  /**
+   * One chat turn's reply.
+   *
+   * @param sources the source chunks the reply was grounded in, empty when the turn was grounded
+   *                in the catalogue as a whole rather than in one venue's text contents.
+   */
+  public record ChatResponse(UUID sessionId, String sessionTitle, String reply, String model, Instant timestamp,
+                             List<VenueAskDtos.VenueAskSource> sources) {
   }
 
   public record SessionResponse(UUID id, UUID userId, String title, String model, Instant createdAt,

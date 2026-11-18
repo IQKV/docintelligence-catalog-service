@@ -33,12 +33,15 @@ public interface VenueChatService {
    * Sends one message in a chat session and returns the assistant's reply.
    *
    * <p>A {@code null} {@code sessionId} starts a new session owned by {@code userId}; otherwise the
-   * session is resumed and must be owned by {@code userId}.
+   * session is resumed and must be owned by {@code userId}. The turn is grounded in the single
+   * venue named by {@code venueId} when present, and in the whole catalogue otherwise.
    *
    * @throws EmptyMessageException             when the message carries no visible text
    * @throws PromptInjectionException          when the message is rejected by the prompt-injection guard
    * @throws VenueChatSessionNotFoundException when a non-null {@code sessionId} is unknown or owned
    *     by another user
+   * @throws com.iqkv.docintelligence.catalogservice.venue.VenueNotFoundException when a non-null
+   *     {@code venueId} is unknown in the active tenant schema
    */
   VenueChatDtos.ChatResponse chat(UUID userId, VenueChatDtos.SendMessageRequest request);
 

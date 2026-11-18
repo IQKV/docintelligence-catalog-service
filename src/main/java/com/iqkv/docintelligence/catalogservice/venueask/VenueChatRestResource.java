@@ -76,7 +76,9 @@ public class VenueChatRestResource {
       summary = "Send a chat message",
       description = "Sends one message in a venue-catalogue chat session and returns the reply. A "
                     + "null sessionId starts a new session; otherwise the session is resumed and "
-                    + "must be owned by the caller.")
+                    + "must be owned by the caller. An optional venueId grounds the turn in that "
+                    + "single venue instead of the whole catalogue; a venue-scoped reply returns "
+                    + "the source chunks it cited.")
   @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
              description = "8-char alphanumeric tenant key. "
                            + "Can be omitted when the JWT carries a tenant_id claim.")
