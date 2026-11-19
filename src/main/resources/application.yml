@@ -103,6 +103,11 @@ iqkv:
       # retrieved sources and the chat endpoints degrade to a canned reply.
       enabled: ${CATALOG_VENUE_ASK_ENABLED:true}
       system-prompt: ${CATALOG_VENUE_ASK_SYSTEM_PROMPT:You are the venue catalog assistant for a venue team. Answer using only the CONTEXT provided. If the context does not contain the answer, say you do not know. Never invent venue facts. Cite sources by their label when you use them.}
+      # Selectable persona overlays. The client sends one of these keys with a turn; only keys
+      # configured here resolve, so client input never reaches the system message.
+      personas:
+        concierge: ${CATALOG_VENUE_ASK_PERSONA_CONCIERGE:Adopt a warm, concierge tone. Lead with what the venue offers and suggest a helpful next step when it fits.}
+        compliance: ${CATALOG_VENUE_ASK_PERSONA_COMPLIANCE:Answer strictly from the CONTEXT. If the context does not contain the answer, say you do not know. Do not speculate or use outside knowledge.}
       max-input-chars: ${CATALOG_VENUE_ASK_MAX_INPUT_CHARS:4000}
       max-output-tokens: ${CATALOG_VENUE_ASK_MAX_OUTPUT_TOKENS:1024}
       temperature: ${CATALOG_VENUE_ASK_TEMPERATURE:0.2}

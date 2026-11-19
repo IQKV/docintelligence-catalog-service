@@ -108,7 +108,7 @@ class VenueChatServiceImpl implements VenueChatService {
     final String userContent = truncate(request.content(), properties.maxInputChars());
     insertMessage(session.getId(), MessageRole.USER, userContent, null);
 
-    final GroundedReply reply = reply(userContent, history, venue, session.getModel());
+    final GroundedReply reply = reply(userContent, history, venue, session.getModel(), request.persona());
     return recordReply(session, userContent, reply);
   }
 
@@ -178,7 +178,8 @@ class VenueChatServiceImpl implements VenueChatService {
   private GroundedReply reply(final String userContent,
                               final List<VenueChatMessage> history,
                               final VenueDtos.VenuePublicResponse venue,
-                              final String model) {
+                              final String model,
+                              final String persona) {
     final String query = retrievalQuery(history, userContent);
     final String context;
     final List<VenueAskDtos.VenueAskSource> sources;
@@ -194,7 +195,7 @@ class VenueChatServiceImpl implements VenueChatService {
       context = truncate(VenueContextAssembler.renderVenueBlock(venue, sources), properties.maxContextChars());
     }
 
-    final String reply = assistant.reply(userContent, context, history, model);
+    final String reply = assistant.reply(userContent, context, history, model, persona);
     if (reply == null) {
       log.info("Venue chat produced no reply, using the unavailable-reply fallback");
       return new GroundedReply(UNAVAILABLE_REPLY, sources);

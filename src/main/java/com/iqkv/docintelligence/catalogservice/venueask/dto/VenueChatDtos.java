@@ -39,8 +39,11 @@ public final class VenueChatDtos {
    *
    * @param venueId optional venue to ground this turn on. When present the turn is answered from
    *                that single venue's profile and source chunks instead of the whole catalogue.
+   * @param persona optional key of a configured persona overlay to apply to this turn; unknown or
+   *                blank keys fall back to the base assistant
    */
-  public record SendMessageRequest(UUID sessionId, UUID venueId, @NotBlank String content, String model) {
+  public record SendMessageRequest(UUID sessionId, UUID venueId, @NotBlank String content, String model,
+                                   String persona) {
   }
 
   /**

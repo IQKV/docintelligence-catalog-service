@@ -16,6 +16,8 @@
 
 package com.iqkv.docintelligence.catalogservice.infrastructure.config;
 
+import java.util.Map;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -30,6 +32,10 @@ import org.springframework.validation.annotation.Validated;
  *       When off, the ask endpoints answer {@code answered=false} with the retrieved sources and
  *       the chat endpoints still persist sessions but degrade to a canned reply.</li>
  *   <li>{@code system-prompt} — persona and grounding rules injected as the system message.</li>
+ *   <li>{@code personas} — selectable persona overlays, keyed by the value the client sends with a
+ *       turn; each value is appended to the system message after the base prompt and before the
+ *       untrusted-data rules. Only configured keys resolve, so client input never reaches the
+ *       system message.</li>
  *   <li>{@code max-input-chars} — user message is truncated to this length before being sent.</li>
  *   <li>{@code max-output-tokens} — completion length cap.</li>
  *   <li>{@code temperature} — response creativity; low by default for factual grounding.</li>
@@ -47,6 +53,7 @@ import org.springframework.validation.annotation.Validated;
 public record VenueAskProperties(
     @DefaultValue("true") boolean enabled,
     String systemPrompt,
+    Map<String, String> personas,
     @DefaultValue("4000") int maxInputChars,
     @DefaultValue("1024") int maxOutputTokens,
     @DefaultValue("0.2") double temperature,

@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAskProperties;
@@ -49,8 +50,8 @@ class VenueAskServiceImplTest {
   private static final UUID VENUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
   private static final VenueAskProperties PROPERTIES = new VenueAskProperties(
-      true, "You are the venue catalogue assistant.", 4000, 1024, 0.2, "llama3.2", 12000, 8, 4000,
-      new VenueAskProperties.Guard(true));
+      true, "You are the venue catalogue assistant.", Map.of("concierge", "Be warm."),
+      4000, 1024, 0.2, "llama3.2", 12000, 8, 4000, new VenueAskProperties.Guard(true));
 
   @Mock
   private VenueContextAssembler contextAssembler;
