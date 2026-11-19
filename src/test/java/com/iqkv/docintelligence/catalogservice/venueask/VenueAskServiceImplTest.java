@@ -97,7 +97,7 @@ class VenueAskServiceImplTest {
     // Arrange
     final var request = new VenueAskDtos.VenueAskRequest("what is the capacity?", null);
     final var source = new VenueAskDtos.VenueAskSource(
-        UUID.randomUUID(), null, "brochure.pdf", "Up to 200 guests.", 0.81);
+        UUID.randomUUID(), null, "brochure.pdf", "Up to 200 guests.", 12, 0.81);
     when(venueService.getPublicVenue(VENUE_ID)).thenReturn(venue());
     when(contextAssembler.retrieveSources(VENUE_ID, request.question(), 6)).thenReturn(List.of(source));
     when(assistant.answer(anyString(), anyString())).thenReturn(null);

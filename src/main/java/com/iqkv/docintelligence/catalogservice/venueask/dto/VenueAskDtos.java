@@ -55,6 +55,7 @@ public final class VenueAskDtos {
    * @param assetId      the {@code venue_assets} row the text was extracted from, when known
    * @param label        the human-readable source name (title or file name), when known
    * @param snippet      the verbatim excerpt used as grounding
+   * @param page         1-based page the snippet starts on; {@code null} when the source has no pages
    * @param similarity   cosine similarity in [0, 1] when the chunk was ranked by vector search
    */
   public record VenueAskSource(
@@ -62,6 +63,7 @@ public final class VenueAskDtos {
       UUID assetId,
       String label,
       String snippet,
+      Integer page,
       double similarity) {
   }
 

@@ -211,7 +211,7 @@ class VenueChatServiceImplTest {
     final VenueDtos.VenuePublicResponse venue = venue();
     when(venueService.getPublicVenue(VENUE_ID)).thenReturn(venue);
     final List<VenueAskDtos.VenueAskSource> sources = List.of(new VenueAskDtos.VenueAskSource(
-        UUID.randomUUID(), null, "Parking note", "Two levels of parking.", 0.9));
+        UUID.randomUUID(), null, "Parking note", "Two levels of parking.", 3, 0.9));
     when(contextAssembler.retrieveSources(VENUE_ID, request.content(), 6)).thenReturn(sources);
     final String context = VenueContextAssembler.renderVenueBlock(venue, sources);
     when(assistant.reply(request.content(), context, "llama3.2")).thenReturn("Yes, two levels.");

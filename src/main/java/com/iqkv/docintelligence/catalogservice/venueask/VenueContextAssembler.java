@@ -16,8 +16,13 @@
 
 package com.iqkv.docintelligence.catalogservice.venueask;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.iqkv.docintelligence.catalogservice.venue.VenueAssetService;
 import com.iqkv.docintelligence.catalogservice.venue.VenueService;
@@ -48,6 +53,25 @@ class VenueContextAssembler {
 
   /** Cap on the excerpt of one source chunk kept for grounding and citation. */
   static final int MAX_SNIPPET_CHARS = 1_200;
+
+  /**
+   * The {@code [page N]} note the processing worker writes into persisted venue source text.
+   */
+  private static final Pattern PAGE_MARKER = Pattern.compile("\\[page (\\d+)\\]");
+
+  /**
+   * Word terms a question is split into to score one page against it.
+   */
+  private static final Pattern TERM = Pattern.compile("[\\p{L}\\p{N}]+");
+
+  /**
+   * Question scaffolding that carries no retrieval signal, so a page is not scored on it.
+   */
+  private static final Set<String> STOP_WORDS = Set.of(
+      "the", "a", "an", "is", "are", "was", "were", "of", "in", "on", "at", "for", "to", "and",
+      "or", "what", "which", "who", "how", "when", "where", "why", "it", "this", "that", "there",
+      "your", "you", "we", "our", "can", "could", "do", "does", "be", "has", "have", "with", "by",
+      "from", "as", "any", "all", "please", "about");
 
   private final VenueService venueService;
   private final VenueTextContentService venueTextContentService;
@@ -89,14 +113,14 @@ class VenueContextAssembler {
     } catch (final RuntimeException ex) {
       log.warn("Venue source semantic search failed, falling back to creation order: venueId={}, error={}",
           venueId, ex.getMessage());
-      return firstRows(venueId, maxSources);
+      return firstRows(venueId, question, maxSources);
     }
     if (ranked.isEmpty()) {
-      return firstRows(venueId, maxSources);
+      return firstRows(venueId, question, maxSources);
     }
     return ranked.stream()
-        .map(row -> new VenueAskDtos.VenueAskSource(
-            row.id(), row.sourceAssetId(), row.label(), snippet(row.content()), row.similarity()))
+        .map(row -> toSource(row.id(), row.sourceAssetId(), row.label(), row.content(),
+            row.similarity(), question))
         .toList();
   }
 
@@ -157,12 +181,111 @@ class VenueContextAssembler {
     return sb.toString();
   }
 
-  private List<VenueAskDtos.VenueAskSource> firstRows(final UUID venueId, final int maxSources) {
+  private List<VenueAskDtos.VenueAskSource> firstRows(final UUID venueId,
+                                                      final String question,
+                                                      final int maxSources) {
     return venueTextContentService.listByVenue(venueId).items().stream()
         .limit(maxSources)
-        .map(row -> new VenueAskDtos.VenueAskSource(
-            row.id(), row.sourceAssetId(), row.label(), snippet(row.content()), 0.0))
+        .map(row -> toSource(row.id(), row.sourceAssetId(), row.label(), row.content(), 0.0, question))
         .toList();
+  }
+
+  private static VenueAskDtos.VenueAskSource toSource(final UUID sourceTextId,
+                                                      final UUID assetId,
+                                                      final String label,
+                                                      final String content,
+                                                      final double similarity,
+                                                      final String question) {
+    final PageExcerpt excerpt = bestExcerpt(content, question);
+    return new VenueAskDtos.VenueAskSource(
+        sourceTextId, assetId, label, excerpt.text(), excerpt.page(), similarity);
+  }
+
+  /**
+   * Selects the passage of {@code content} to cite together with the page it starts on.
+   *
+   * <p>Text carrying {@code [page N]} notes is scored page by page against the question's terms, so
+   * the snippet points at the passage an answer is expected to come from rather than at the
+   * document head. Text without page notes — or a question with no scoring term — keeps the leading
+   * excerpt, and {@code page} is then {@code null}.
+   */
+  static PageExcerpt bestExcerpt(final String content, final String question) {
+    if (content == null || content.isBlank()) {
+      return new PageExcerpt(null, "");
+    }
+    final List<PageExcerpt> sections = pages(content);
+    if (sections.isEmpty()) {
+      return new PageExcerpt(null, snippet(content));
+    }
+    final List<String> terms = terms(question);
+    PageExcerpt best = sections.getFirst();
+    int bestScore = score(best.text(), terms);
+    for (int i = 1; i < sections.size(); i++) {
+      final int score = score(sections.get(i).text(), terms);
+      if (score > bestScore) {
+        bestScore = score;
+        best = sections.get(i);
+      }
+    }
+    return new PageExcerpt(best.page(), snippet(best.text().strip()));
+  }
+
+  /**
+   * Splits persisted text into its {@code [page N]} sections; empty when it carries no page note.
+   */
+  private static List<PageExcerpt> pages(final String content) {
+    final List<PageExcerpt> sections = new ArrayList<>();
+    final Matcher matcher = PAGE_MARKER.matcher(content);
+    Integer page = null;
+    int start = -1;
+    while (matcher.find()) {
+      if (start >= 0) {
+        sections.add(new PageExcerpt(page, content.substring(start, matcher.start())));
+      }
+      page = Integer.parseInt(matcher.group(1));
+      start = matcher.end();
+    }
+    if (start >= 0) {
+      sections.add(new PageExcerpt(page, content.substring(start)));
+    }
+    return sections;
+  }
+
+  /** The distinct question terms a page is scored on — single characters and scaffolding dropped. */
+  private static List<String> terms(final String question) {
+    if (question == null || question.isBlank()) {
+      return List.of();
+    }
+    final List<String> terms = new ArrayList<>();
+    final Matcher matcher = TERM.matcher(question.toLowerCase(Locale.ROOT));
+    while (matcher.find()) {
+      final String term = matcher.group();
+      if (term.length() > 1 && !STOP_WORDS.contains(term) && !terms.contains(term)) {
+        terms.add(term);
+      }
+    }
+    return terms;
+  }
+
+  /** How many of the question's terms the page mentions. */
+  private static int score(final String text, final List<String> terms) {
+    if (terms.isEmpty() || text.isEmpty()) {
+      return 0;
+    }
+    final String lower = text.toLowerCase(Locale.ROOT);
+    int hits = 0;
+    for (final String term : terms) {
+      if (lower.contains(term)) {
+        hits++;
+      }
+    }
+    return hits;
+  }
+
+  /**
+   * One page of a source document: its 1-based number ({@code null} when unpaged) and its text.
+   */
+  record PageExcerpt(Integer page, String text) {
   }
 
   private static VenueDtos.VenueSemanticSearchFilters emptyFilters() {
