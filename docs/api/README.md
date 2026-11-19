@@ -141,6 +141,27 @@ The chosen `sourceTextId` must belong to the venue — the row is resolved from 
 
 ---
 
+### Venue Chat (Tenant Surface)
+
+Conversational chat grounded in the tenant's own venue catalogue. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim, so sessions and messages live in the caller's `t_{tenantKey}` schema and are owned by the authenticated user — another user's session resolves to `404`.
+
+The routes mirror the AI chat client contract (`POST`, `GET /sessions`, `GET /sessions/{sessionId}/messages`, `DELETE /sessions/{sessionId}`), so a chat client can point at this service by swapping the endpoint base only.
+
+| Method   | Path                                  | Auth                        | Description                                                                                                                                                            |
+| -------- | ------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/chat`                               | JWT `TENANT_OWNER`/`MEMBER` | Send one message and return the reply; a null `sessionId` starts a session, otherwise the owned session is resumed; an optional `venueId` grounds the turn in one venue and returns the source chunks it cited |
+| `GET`    | `/chat/sessions`                      | JWT `TENANT_OWNER`/`MEMBER` | List the caller's own sessions, most recently updated first; paginated via `limit` (default 20) and `offset`                                                           |
+| `GET`    | `/chat/sessions/{sessionId}/messages` | JWT `TENANT_OWNER`/`MEMBER` | List an owned session's messages, oldest first; paginated via `limit` (default 50) and `offset`                                                                        |
+| `DELETE` | `/chat/sessions/{sessionId}`          | JWT `TENANT_OWNER`/`MEMBER` | Delete an owned session together with its messages; returns `204`                                                                                                      |
+
+`POST /chat` takes `sessionId?`, `venueId?`, `content`, `model?` and `persona?`. A blank `persona` resolves server-side to the configured default overlay (`iqkv.catalog.venue-ask.default-persona`, pinned to `compliance` for MVP); an unknown key falls back to the base assistant. The persona names a key configured on the server — client input never reaches the system message.
+
+A catalogue-grounded reply (no `venueId`) cites nothing. A venue-grounded reply carries the source chunks it used in `sources` — each with `sourceTextId`, `assetId`, `label`, verbatim `snippet`, `page` (1-based; `null` when the source has no pages) and `similarity`. The same `sources` are persisted on the assistant message, so citations survive a reload. When the AI feature is off or the model is unreachable the endpoint returns `200` with a canned reply rather than failing.
+
+Chat paths answer `400` on an empty message, a prompt-injection rejection or an unresolvable tenant, `401` for a missing or invalid JWT, `403` when the caller lacks the required authority, and `404` when the session does not exist or is not owned by the caller.
+
+---
+
 ### Venue Text Contents (Tenant Surface)
 
 Raw or markdown text chunks extracted from venue source documents. Reads are open to `MEMBER`, `TENANT_OWNER` and `ADMIN`; writes require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim.
