@@ -193,13 +193,25 @@ class VenueSemanticSearchService {
 
   // ── Filter construction ───────────────────────────────────────────────────
 
-  private static Filter buildFilter(final String city,
-                                     final List<String> venueTypes,
-                                     final Integer minCapacity,
-                                     final Integer maxCapacity,
-                                     final String cateringPolicy,
-                                     final List<String> amenities,
-                                     final Boolean accessible) {
+  /**
+   * Builds tenant search predicates from validated planner filters.
+   *
+   * @param city optional city
+   * @param venueTypes canonical venue categories
+   * @param minCapacity optional lower capacity bound
+   * @param maxCapacity optional upper capacity bound
+   * @param cateringPolicy optional catering policy
+   * @param amenities required amenities
+   * @param accessible whether accessible venues are required
+   * @return parameterized SQL and binders
+   */
+  static Filter buildFilter(final String city,
+                            final List<String> venueTypes,
+                            final Integer minCapacity,
+                            final Integer maxCapacity,
+                            final String cateringPolicy,
+                            final List<String> amenities,
+                            final Boolean accessible) {
     final StringBuilder sql = new StringBuilder();
     final List<Binder> binders = new ArrayList<>();
 
@@ -207,7 +219,7 @@ class VenueSemanticSearchService {
       sql.append("\n  AND LOWER(city) = LOWER(?)");
       binders.add((ps, index) -> ps.setObject(index, city, Types.VARCHAR));
     }
-    addItemFilter(sql, binders, "venue_type", "venue_type", venueTypes);
+    addVenueTypeFilter(sql, binders, venueTypes);
     if (minCapacity != null) {
       sql.append("\n  AND ").append(CAPACITY_NUMERIC).append(" >= ?");
       binders.add((ps, index) -> ps.setObject(index, minCapacity, Types.NUMERIC));
@@ -258,6 +270,49 @@ class VenueSemanticSearchService {
     sql.append(")");
   }
 
+  /**
+   * Matches profile categories plus legacy scalar and array venue-type rows during the rollout.
+   */
+  private static void addVenueTypeFilter(final StringBuilder sql,
+                                         final List<Binder> binders,
+                                         final List<String> values) {
+    if (values == null || values.isEmpty()) {
+      return;
+    }
+    sql.append("\n  AND (");
+    boolean first = true;
+    for (final String value : values) {
+      appendMetadataValueMatch(sql, binders, "profile", "category", value, first, false);
+      first = false;
+      appendMetadataValueMatch(sql, binders, "venue_type", "venue_type", value, first, false);
+      appendMetadataValueMatch(sql, binders, "venue_type", "venue_type", value, false, true);
+    }
+    sql.append(")");
+  }
+
+  private static void appendMetadataValueMatch(final StringBuilder sql,
+                                                final List<Binder> binders,
+                                                final String group,
+                                                final String field,
+                                                final String value,
+                                                final boolean first,
+                                                final boolean arrayValue) {
+    if (!first) {
+      sql.append(" OR ");
+    }
+    sql.append("metadata->'items' @> jsonb_build_array(jsonb_build_object(")
+        .append("'group', '").append(group)
+        .append("', 'field', '").append(field)
+        .append("', 'value', ");
+    if (arrayValue) {
+      sql.append("jsonb_build_array(?)");
+    } else {
+      sql.append("?");
+    }
+    sql.append("))");
+    binders.add((ps, index) -> ps.setObject(index, value, Types.VARCHAR));
+  }
+
   private static void bindAll(final PreparedStatement ps, final List<Binder> binders) throws SQLException {
     int index = 1;
     for (final Binder binder : binders) {
@@ -280,14 +335,14 @@ class VenueSemanticSearchService {
   /**
    * A parameterised SQL fragment and the binders that populate its placeholders, in order.
    */
-  private record Filter(String sql, List<Binder> binders) {
+  record Filter(String sql, List<Binder> binders) {
   }
 
   /**
    * Sets one positional parameter; kept as a named type so a {@link SQLException} can propagate.
    */
   @FunctionalInterface
-  private interface Binder {
+  interface Binder {
 
     void bind(PreparedStatement ps, int index) throws SQLException;
   }
