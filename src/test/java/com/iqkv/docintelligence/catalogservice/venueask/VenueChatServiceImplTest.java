@@ -59,7 +59,7 @@ class VenueChatServiceImplTest {
   private static final UUID VENUE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000cc");
 
   private static final VenueAskProperties PROPERTIES = new VenueAskProperties(
-      true, "You are the venue catalogue assistant.", 4000, 1024, 0.2, "llama3.2", 12000,
+      true, "You are the venue catalogue assistant.", 4000, 1024, 0.2, "llama3.2", 12000, 8, 4000,
       new VenueAskProperties.Guard(true));
 
   @Mock
@@ -117,7 +117,7 @@ class VenueChatServiceImplTest {
     final var request = new VenueChatDtos.SendMessageRequest(null, null, "Where can I host a rooftop gala?", null);
     when(assistant.model()).thenReturn("llama3.2");
     when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
-    when(assistant.reply(request.content(), "", "llama3.2")).thenReturn("Try Skyline Roof.");
+    when(assistant.reply(request.content(), "", List.of(), "llama3.2")).thenReturn("Try Skyline Roof.");
 
     // Act
     final var response = service.chat(USER_ID, request);
@@ -148,7 +148,7 @@ class VenueChatServiceImplTest {
     final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "Any update?", null);
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
     when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
-    when(assistant.reply(request.content(), "", "llama3.2")).thenReturn("Yes.");
+    when(assistant.reply(request.content(), "", List.of(), "llama3.2")).thenReturn("Yes.");
 
     // Act
     final var response = service.chat(USER_ID, request);
@@ -192,7 +192,7 @@ class VenueChatServiceImplTest {
     final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "Anything?", null);
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
     when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
-    when(assistant.reply(request.content(), "", "llama3.2")).thenReturn(null);
+    when(assistant.reply(request.content(), "", List.of(), "llama3.2")).thenReturn(null);
 
     // Act
     final var response = service.chat(USER_ID, request);
@@ -214,7 +214,7 @@ class VenueChatServiceImplTest {
         UUID.randomUUID(), null, "Parking note", "Two levels of parking.", 3, 0.9));
     when(contextAssembler.retrieveSources(VENUE_ID, request.content(), 6)).thenReturn(sources);
     final String context = VenueContextAssembler.renderVenueBlock(venue, sources);
-    when(assistant.reply(request.content(), context, "llama3.2")).thenReturn("Yes, two levels.");
+    when(assistant.reply(request.content(), context, List.of(), "llama3.2")).thenReturn("Yes, two levels.");
 
     // Act
     final var response = service.chat(USER_ID, request);
@@ -229,6 +229,57 @@ class VenueChatServiceImplTest {
         .isEqualTo(VenueChatDtoMapper.sourcesToJson(sources));
     verify(contextAssembler, never()).retrieveVenues(request.content(), null, 10);
     verify(sessionMapper).update(session);
+  }
+
+  @Test
+  @DisplayName("replays the earlier turns and ranks a follow-up together with the previous question")
+  void replaysEarlierTurns() {
+    // Arrange
+    final var session = session(USER_ID);
+    final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "And the parking?", null);
+    when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
+    final VenueChatMessage earlierQuestion = message(MessageRole.USER, "How big is the hall?");
+    final VenueChatMessage earlierAnswer = message(MessageRole.ASSISTANT, "It seats 200.");
+    // The mapper hands back the newest turn first; the service replays them oldest first.
+    when(messageMapper.findRecentBySessionId(SESSION_ID, 8))
+        .thenReturn(List.of(earlierAnswer, earlierQuestion));
+    final List<VenueChatMessage> history = List.of(earlierQuestion, earlierAnswer);
+    when(contextAssembler.retrieveVenues("And the parking? How big is the hall?", null, 10))
+        .thenReturn(noVenues());
+    when(assistant.reply(request.content(), "", history, "llama3.2")).thenReturn("Two levels.");
+
+    // Act
+    final var response = service.chat(USER_ID, request);
+
+    // Assert
+    assertThat(response.reply()).isEqualTo("Two levels.");
+    verify(contextAssembler).retrieveVenues("And the parking? How big is the hall?", null, 10);
+    verify(assistant).reply("And the parking?", "", history, "llama3.2");
+  }
+
+  @Test
+  @DisplayName("keeps only the earlier turns that fit the memory budget")
+  void trimsMemoryToTheBudget() {
+    // Arrange: a 15-char budget fits the newest 10-char turn but not the one before it.
+    final VenueAskProperties tight = new VenueAskProperties(
+        true, "You are the venue catalogue assistant.", 4000, 1024, 0.2, "llama3.2", 12000, 8, 15,
+        new VenueAskProperties.Guard(true));
+    final var service = new VenueChatServiceImpl(sessionMapper, messageMapper, contextAssembler,
+        assistant, tight, venueService);
+    final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "Why?", null);
+    when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session(USER_ID)));
+    final VenueChatMessage older = message(MessageRole.USER, "0123456789");
+    final VenueChatMessage newest = message(MessageRole.USER, "abcdefghij");
+    when(messageMapper.findRecentBySessionId(SESSION_ID, 8)).thenReturn(List.of(newest, older));
+    when(contextAssembler.retrieveVenues("Why? abcdefghij", null, 10)).thenReturn(noVenues());
+    when(assistant.reply(request.content(), "", List.of(newest), "llama3.2")).thenReturn("Because.");
+
+    // Act
+    final var response = service.chat(USER_ID, request);
+
+    // Assert
+    assertThat(response.reply()).isEqualTo("Because.");
+    verify(assistant).reply("Why?", "", List.of(newest), "llama3.2");
   }
 
   @Test

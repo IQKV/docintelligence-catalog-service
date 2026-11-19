@@ -17,6 +17,8 @@
 package com.iqkv.docintelligence.catalogservice.venueask;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -101,10 +103,12 @@ class VenueChatServiceImpl implements VenueChatService {
         ? null : venueService.getPublicVenue(request.venueId());
 
     final VenueChatSession session = resolveSession(userId, request);
+    // Read before the current turn is persisted, so the memory holds the earlier turns only.
+    final List<VenueChatMessage> history = history(session.getId());
     final String userContent = truncate(request.content(), properties.maxInputChars());
     insertMessage(session.getId(), MessageRole.USER, userContent, null);
 
-    final GroundedReply reply = reply(userContent, venue, session.getModel());
+    final GroundedReply reply = reply(userContent, history, venue, session.getModel());
     return recordReply(session, userContent, reply);
   }
 
@@ -166,32 +170,80 @@ class VenueChatServiceImpl implements VenueChatService {
 
   /**
    * Answers one turn, grounded either in the one venue the turn names or, when it names none, in
-   * the catalogue venues most relevant to the message. A failed retrieval or model call degrades
-   * to {@link #UNAVAILABLE_REPLY} so the conversation continues.
+   * the catalogue venues most relevant to the message. Retrieval is ranked against the turn plus
+   * the previous question (see {@link #retrievalQuery}), and the earlier turns of the session are
+   * handed to the model as memory. A failed retrieval or model call degrades to
+   * {@link #UNAVAILABLE_REPLY} so the conversation continues.
    */
   private GroundedReply reply(final String userContent,
+                              final List<VenueChatMessage> history,
                               final VenueDtos.VenuePublicResponse venue,
                               final String model) {
+    final String query = retrievalQuery(history, userContent);
     final String context;
     final List<VenueAskDtos.VenueAskSource> sources;
     if (venue == null) {
       final VenueDtos.VenuePublicSemanticSearchResponse search =
-          contextAssembler.retrieveVenues(userContent, null, GROUNDING_VENUES);
+          contextAssembler.retrieveVenues(query, null, GROUNDING_VENUES);
       context = search.items().isEmpty()
           ? "" : truncate(VenueContextAssembler.renderVenueListBlock(search.items()), properties.maxContextChars());
       // The catalogue path cites venues, not source chunks, so there is nothing to return here.
       sources = List.of();
     } else {
-      sources = contextAssembler.retrieveSources(venue.id(), userContent, GROUNDING_SOURCES);
+      sources = contextAssembler.retrieveSources(venue.id(), query, GROUNDING_SOURCES);
       context = truncate(VenueContextAssembler.renderVenueBlock(venue, sources), properties.maxContextChars());
     }
 
-    final String reply = assistant.reply(userContent, context, model);
+    final String reply = assistant.reply(userContent, context, history, model);
     if (reply == null) {
       log.info("Venue chat produced no reply, using the unavailable-reply fallback");
       return new GroundedReply(UNAVAILABLE_REPLY, sources);
     }
     return new GroundedReply(reply, sources);
+  }
+
+  /**
+   * The earlier turns of {@code sessionId} in speaking order, trimmed to the configured turn count
+   * and total size so a long conversation still fits the model's context. An empty list means the
+   * turn is answered without memory — the first turn of every session, and any session whose stored
+   * turns do not fit the budget.
+   */
+  private List<VenueChatMessage> history(final UUID sessionId) {
+    final List<VenueChatMessage> recent =
+        new ArrayList<>(messageMapper.findRecentBySessionId(sessionId, properties.maxHistoryMessages()));
+    Collections.reverse(recent);
+    int budget = properties.maxHistoryChars();
+    int from = recent.size();
+    while (from > 0) {
+      final String content = recent.get(from - 1).getContent();
+      final int cost = content == null ? 0 : content.length();
+      if (cost > budget) {
+        break;
+      }
+      budget -= cost;
+      from--;
+    }
+    return List.copyOf(recent.subList(from, recent.size()));
+  }
+
+  /**
+   * The text retrieval is ranked against. A follow-up such as "and the parking?" names no subject of
+   * its own, so it is ranked together with the previous question of the conversation; the current
+   * text stays first so it survives the input cap. A turn with no earlier question — or one whose
+   * earlier turns carry none, as when the model answered a question of its own — ranks on its own
+   * text alone.
+   */
+  private String retrievalQuery(final List<VenueChatMessage> history, final String question) {
+    String previous = "";
+    for (int i = history.size() - 1; i >= 0; i--) {
+      final VenueChatMessage message = history.get(i);
+      if (message.getRole() == MessageRole.USER && message.getContent() != null
+          && !message.getContent().isBlank()) {
+        previous = message.getContent();
+        break;
+      }
+    }
+    return previous.isEmpty() ? question : truncate(question + " " + previous, properties.maxInputChars());
   }
 
   /** Stores the assistant turn, refreshes the session and builds the response. */

@@ -35,6 +35,9 @@ import org.springframework.validation.annotation.Validated;
  *   <li>{@code temperature} — response creativity; low by default for factual grounding.</li>
  *   <li>{@code default-model} — model tag used when the client does not specify one.</li>
  *   <li>{@code max-context-chars} — total size of the retrieved venue context sent as grounding.</li>
+ *   <li>{@code max-history-messages} — how many earlier turns of a chat session are replayed as
+ *       memory, so a follow-up like "and the parking?" can be resolved against the conversation.</li>
+ *   <li>{@code max-history-chars} — total size the replayed turns may add to the prompt.</li>
  *   <li>{@code guard} — prompt-injection guard; {@code guard.enabled} turns rejection and the
  *       output leak check on or off.</li>
  * </ul>
@@ -49,6 +52,8 @@ public record VenueAskProperties(
     @DefaultValue("0.2") double temperature,
     String defaultModel,
     @DefaultValue("12000") int maxContextChars,
+    @DefaultValue("8") int maxHistoryMessages,
+    @DefaultValue("4000") int maxHistoryChars,
     Guard guard) {
 
   /**

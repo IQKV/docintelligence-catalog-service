@@ -108,6 +108,9 @@ iqkv:
       temperature: ${CATALOG_VENUE_ASK_TEMPERATURE:0.2}
       default-model: ${CATALOG_VENUE_ASK_MODEL:${SPRING_AI_OLLAMA_CHAT_OPTIONS_MODEL:llama3.2}}
       max-context-chars: ${CATALOG_VENUE_ASK_MAX_CONTEXT_CHARS:12000}
+      # Earlier turns of a chat session replayed as memory, and the size they may add to the prompt.
+      max-history-messages: ${CATALOG_VENUE_ASK_MAX_HISTORY_MESSAGES:8}
+      max-history-chars: ${CATALOG_VENUE_ASK_MAX_HISTORY_CHARS:4000}
       guard:
         # Prompt-injection guard for chat / ask input and the output leak check.
         enabled: ${CATALOG_VENUE_ASK_GUARD_ENABLED:true}

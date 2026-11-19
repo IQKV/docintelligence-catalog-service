@@ -32,6 +32,14 @@
     LIMIT #{limit} OFFSET #{offset}
   </select>
 
+  <select id="findRecentBySessionId" resultMap="VenueChatMessageResultMap">
+    SELECT id, session_id, role, content, sources, created_at
+    FROM venue_chat_messages
+    WHERE session_id = #{sessionId,jdbcType=OTHER}
+    ORDER BY created_at DESC, id DESC
+    LIMIT #{limit}
+  </select>
+
   <select id="countBySessionId" resultType="long">
     SELECT COUNT(*) FROM venue_chat_messages WHERE session_id = #{sessionId,jdbcType=OTHER}
   </select>

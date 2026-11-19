@@ -34,6 +34,12 @@ public interface VenueChatMessageMapper {
                                          @Param("limit") int limit,
                                          @Param("offset") int offset);
 
+  /**
+   * The newest turns of one session, newest first — the caller reverses them into speaking order.
+   */
+  List<VenueChatMessage> findRecentBySessionId(@Param("sessionId") UUID sessionId,
+                                               @Param("limit") int limit);
+
   long countBySessionId(@Param("sessionId") UUID sessionId);
 
   void deleteBySessionId(@Param("sessionId") UUID sessionId);
