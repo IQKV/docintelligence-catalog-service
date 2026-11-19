@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- The source chunks an assistant turn was grounded in, kept so the citations survive a
+         reload. A JSONB array of VenueAskSource objects; NULL for user turns and for assistant
+         turns grounded in the catalogue as a whole rather than in one venue's text contents.
+
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before
+         these changesets run, so no schemaName is set on the statements below). -->
+
+    <changeSet id="20261119120000-add-venue-chat-message-sources" author="iqkv">
+
+        <addColumn tableName="venue_chat_messages">
+            <column name="sources" type="JSONB"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="venue_chat_messages" columnName="sources"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

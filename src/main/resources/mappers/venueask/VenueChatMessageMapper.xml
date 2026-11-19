@@ -10,19 +10,22 @@
     <result property="role"      column="role"
             javaType="com.iqkv.docintelligence.catalogservice.venueask.MessageRole"/>
     <result property="content"   column="content"/>
+    <result property="sources"   column="sources"    jdbcType="OTHER"
+            typeHandler="com.iqkv.foundation.mybatis.util.JsonTypeHandler"/>
     <result property="createdAt" column="created_at" javaType="java.time.Instant" jdbcType="TIMESTAMP"/>
   </resultMap>
 
   <insert id="insert"
           parameterType="com.iqkv.docintelligence.catalogservice.venueask.VenueChatMessage">
-    INSERT INTO venue_chat_messages (id, session_id, role, content, created_at)
+    INSERT INTO venue_chat_messages (id, session_id, role, content, sources, created_at)
     VALUES (#{id,jdbcType=OTHER}, #{sessionId,jdbcType=OTHER},
             #{role,jdbcType=VARCHAR}, #{content},
+            #{sources,jdbcType=OTHER, typeHandler=com.iqkv.foundation.mybatis.util.JsonTypeHandler},
             #{createdAt,jdbcType=TIMESTAMP})
   </insert>
 
   <select id="findBySessionId" resultMap="VenueChatMessageResultMap">
-    SELECT id, session_id, role, content, created_at
+    SELECT id, session_id, role, content, sources, created_at
     FROM venue_chat_messages
     WHERE session_id = #{sessionId,jdbcType=OTHER}
     ORDER BY created_at ASC

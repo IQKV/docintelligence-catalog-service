@@ -28,6 +28,8 @@ public class VenueChatMessage {
   private UUID sessionId;
   private MessageRole role;
   private String content;
+  /** Denormalised JSONB copy of the sources this turn cited; null on user turns. */
+  private String sources;
   private Instant createdAt;
 
   public UUID getId() {
@@ -60,6 +62,14 @@ public class VenueChatMessage {
 
   public void setContent(final String content) {
     this.content = content;
+  }
+
+  public String getSources() {
+    return sources;
+  }
+
+  public void setSources(final String sources) {
+    this.sources = sources;
   }
 
   public Instant getCreatedAt() {

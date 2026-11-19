@@ -102,7 +102,7 @@ class VenueChatServiceImpl implements VenueChatService {
 
     final VenueChatSession session = resolveSession(userId, request);
     final String userContent = truncate(request.content(), properties.maxInputChars());
-    insertMessage(session.getId(), MessageRole.USER, userContent);
+    insertMessage(session.getId(), MessageRole.USER, userContent, null);
 
     final GroundedReply reply = reply(userContent, venue, session.getModel());
     return recordReply(session, userContent, reply);
@@ -198,7 +198,9 @@ class VenueChatServiceImpl implements VenueChatService {
   private VenueChatDtos.ChatResponse recordReply(final VenueChatSession session, final String userContent,
                                                  final GroundedReply reply) {
     final Instant now = Instant.now();
-    insertMessage(session.getId(), MessageRole.ASSISTANT, reply.text());
+    // The cited sources are stored on the assistant turn so the citations survive a reload.
+    insertMessage(session.getId(), MessageRole.ASSISTANT, reply.text(),
+        VenueChatDtoMapper.sourcesToJson(reply.sources()));
 
     session.setUpdatedAt(now);
     if (session.getTitle() == null) {
@@ -210,12 +212,14 @@ class VenueChatServiceImpl implements VenueChatService {
         now, reply.sources());
   }
 
-  private void insertMessage(final UUID sessionId, final MessageRole role, final String content) {
+  private void insertMessage(final UUID sessionId, final MessageRole role, final String content,
+                             final String sources) {
     final VenueChatMessage message = new VenueChatMessage();
     message.setId(UUID.randomUUID());
     message.setSessionId(sessionId);
     message.setRole(role);
     message.setContent(content);
+    message.setSources(sources);
     message.setCreatedAt(Instant.now());
     messageMapper.insert(message);
   }

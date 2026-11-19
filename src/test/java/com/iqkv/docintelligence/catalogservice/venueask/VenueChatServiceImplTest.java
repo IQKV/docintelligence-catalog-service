@@ -33,6 +33,7 @@ import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAskPro
 import com.iqkv.docintelligence.catalogservice.venue.VenueService;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueAskDtos;
+import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueChatDtoMapper;
 import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueChatDtos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -221,6 +222,11 @@ class VenueChatServiceImplTest {
     // Assert
     assertThat(response.reply()).isEqualTo("Yes, two levels.");
     assertThat(response.sources()).containsExactlyElementsOf(sources);
+    // The citations are stored on the assistant turn so they survive a reload.
+    final ArgumentCaptor<VenueChatMessage> messages = ArgumentCaptor.forClass(VenueChatMessage.class);
+    verify(messageMapper, times(2)).insert(messages.capture());
+    assertThat(messages.getAllValues().getLast().getSources())
+        .isEqualTo(VenueChatDtoMapper.sourcesToJson(sources));
     verify(contextAssembler, never()).retrieveVenues(request.content(), null, 10);
     verify(sessionMapper).update(session);
   }
@@ -242,12 +248,15 @@ class VenueChatServiceImplTest {
   }
 
   @Test
-  @DisplayName("lists the messages of an owned session")
+  @DisplayName("lists the messages of an owned session with their persisted citations")
   void listsMessagesOfOwnedSession() {
     // Arrange
+    final UUID sourceTextId = UUID.randomUUID();
+    final VenueChatMessage assistant = message(MessageRole.ASSISTANT, "Hi");
+    assistant.setSources("[{\"sourceTextId\":\"" + sourceTextId + "\",\"assetId\":null,"
+        + "\"label\":\"Parking note\",\"snippet\":\"Two levels.\",\"similarity\":0.9}]");
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session(USER_ID)));
-    when(messageMapper.findBySessionId(SESSION_ID, 50, 0))
-        .thenReturn(List.of(message(MessageRole.USER, "Hi")));
+    when(messageMapper.findBySessionId(SESSION_ID, 50, 0)).thenReturn(List.of(assistant));
     when(messageMapper.countBySessionId(SESSION_ID)).thenReturn(1L);
 
     // Act
@@ -255,7 +264,28 @@ class VenueChatServiceImplTest {
 
     // Assert
     assertThat(response.totalElements()).isEqualTo(1L);
-    assertThat(response.items().getFirst().content()).isEqualTo("Hi");
+    final var item = response.items().getFirst();
+    assertThat(item.content()).isEqualTo("Hi");
+    assertThat(item.sources()).hasSize(1);
+    assertThat(item.sources().getFirst().sourceTextId()).isEqualTo(sourceTextId);
+    assertThat(item.sources().getFirst().label()).isEqualTo("Parking note");
+  }
+
+  @Test
+  @DisplayName("cites nothing when a turn's stored sources cannot be read")
+  void treatsUnreadableSourcesAsNoCitations() {
+    // Arrange
+    final VenueChatMessage assistant = message(MessageRole.ASSISTANT, "Hi");
+    assistant.setSources("{not-json");
+    when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session(USER_ID)));
+    when(messageMapper.findBySessionId(SESSION_ID, 50, 0)).thenReturn(List.of(assistant));
+    when(messageMapper.countBySessionId(SESSION_ID)).thenReturn(1L);
+
+    // Act
+    final var response = service.getMessages(SESSION_ID, USER_ID, 50, 0);
+
+    // Assert
+    assertThat(response.items().getFirst().sources()).isEmpty();
   }
 
   @Test

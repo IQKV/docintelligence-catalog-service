@@ -60,7 +60,15 @@ public final class VenueChatDtos {
   public record SessionListResponse(List<SessionResponse> items, long totalElements) {
   }
 
-  public record MessageResponse(UUID id, UUID sessionId, MessageRole role, String content, Instant createdAt) {
+  /**
+   * One persisted chat turn.
+   *
+   * @param sources the source chunks an assistant turn was grounded in, carried so citations
+   *                survive a reload; empty for user turns and for catalogue-grounded assistant
+   *                turns.
+   */
+  public record MessageResponse(UUID id, UUID sessionId, MessageRole role, String content, Instant createdAt,
+                                List<VenueAskDtos.VenueAskSource> sources) {
   }
 
   public record MessageListResponse(List<MessageResponse> items, long totalElements) {
