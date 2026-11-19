@@ -11,6 +11,7 @@ The Catalog Service provides:
 - **Venue asset import** — venue-less document upload (PDF/CSV/image) that the processing worker turns into a venue record; the client polls the asset until its derived venue is linked
 - **Venue text contents** — raw/markdown text chunks extracted from venue sources, with keyword and semantic search plus venue linking, on both the tenant and admin surfaces
 - **AI venue enrichment** — "fill from source" assistant that extracts one concrete `metadata.items` field from a preloaded venue source document for the UI to review and apply
+- **AI venue chat** — retrieval-augmented Q&A over the tenant's own venues: a stateless one-shot `ask` surface (single venue or ranked list) plus persistent chat sessions, each returning the source chunks the answer cited so the UI can show and act on citations
 - **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
 - **Ollama connectivity** — LLM client pre-wired to a local Ollama instance via `spring.ai.ollama.*` (base URL and model configurable per environment)
 - **Multi-tenant isolation** — tenant context resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim before every request
@@ -105,6 +106,31 @@ AI-assisted single-field extraction for the tenant UI "fill from source" flow. R
 
 Applying an extracted value is done through `PATCH /venues/{venueId}/metadata`.
 
+### Venue ask
+
+Retrieval-augmented question answering over the tenant's own venue data — the answer is returned together with the source chunks it was grounded in, so the UI can show citations. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. When the AI feature is off or the model is unreachable, the surface degrades to `answered=false` (with any sources found) rather than failing.
+
+| Method | Path                       | Auth                        | Description                                                                                                                        |
+| :----- | :------------------------- | :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/venues/{venueId}/ask`    | JWT `TENANT_OWNER`/`MEMBER` | Answer a natural-language question grounded in one venue's profile, source text chunks and assets; returns the answer with `sources` |
+| `GET`  | `/venues/{venueId}/context` | JWT `TENANT_OWNER`/`MEMBER` | Return the venue's retrieved context — profile, source chunks and assets — without any model call                                  |
+| `POST` | `/venues/ask`              | JWT `TENANT_OWNER`/`MEMBER` | Answer a question grounded in the ranked list of venues; the query is planned into hard filters plus a residual vector query, and the reply carries the ranked venues and applied filters |
+
+Each cited source carries `sourceTextId`, `assetId`, `label`, verbatim `snippet`, `page` (1-based; `null` when the source has no pages) and `similarity`. The ask paths answer `400` on an empty question, a prompt-injection rejection or an unresolvable tenant, `401` for a missing or invalid JWT, `403` when the caller lacks the required authority, and `404` when the venue does not exist.
+
+### Venue chat
+
+Conversational chat over the tenant's venue catalogue, with sessions and messages persisted in the active tenant schema and owned by the authenticated user — another user's session resolves to `404`. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. The routes mirror the UI chat client contract so a client can point here by swapping the endpoint base only.
+
+| Method   | Path                                  | Auth                        | Description                                                                                                                                              |
+| :------- | :------------------------------------ | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/chat`                               | JWT `TENANT_OWNER`/`MEMBER` | Send one message and return the reply; a null `sessionId` starts a session, an owned `sessionId` resumes it; an optional `venueId` grounds the turn in one venue and returns the cited `sources` |
+| `GET`    | `/chat/sessions`                      | JWT `TENANT_OWNER`/`MEMBER` | List the caller's sessions, most recently updated first; paginated via `limit` (default 20) / `offset`                                                    |
+| `GET`    | `/chat/sessions/{sessionId}/messages` | JWT `TENANT_OWNER`/`MEMBER` | List an owned session's messages, oldest first; paginated via `limit` (default 50) / `offset`                                                             |
+| `DELETE` | `/chat/sessions/{sessionId}`          | JWT `TENANT_OWNER`/`MEMBER` | Delete an owned session together with its messages; returns `204`                                                                                         |
+
+`POST /chat` takes `sessionId?`, `venueId?`, `content`, `model?` and `persona?`. A blank `persona` resolves server-side to the configured default overlay (`iqkv.catalog.venue-ask.default-persona`, pinned to `compliance` for MVP); an unknown key falls back to the base assistant — the persona names a server-side key, so client input never reaches the system message. Cited `sources` are persisted on the assistant message so they survive a reload; a catalogue-grounded reply (no `venueId`) cites nothing. When the AI feature is off or the model is unreachable the endpoint returns `200` with a canned reply. Chat paths answer `400` on an empty message, a prompt-injection rejection or an unresolvable tenant, `401`, `403`, and `404` when the session does not exist or is not owned by the caller.
+
 ### Venue text contents
 
 Raw or markdown text chunks extracted from venue source documents. Reads require `MEMBER`, `TENANT_OWNER`, or `ADMIN`; writes require `TENANT_OWNER` or `ADMIN`. Tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim.
@@ -196,6 +222,7 @@ Raw/markdown text-content rows on behalf of the tenant named in the `{tenantKey}
 - Spring Security + OAuth2 Resource Server (RS256 JWT)
 - MinIO client for S3-compatible object storage
 - Micrometer + Prometheus
+- springdoc-openapi (Swagger UI)
 
 ## Observability
 
@@ -335,6 +362,7 @@ src/main/java/com/iqkv/docintelligence/catalogservice/
 │   ├── VenueTextContentRestResource.java
 │   ├── VenueTextContentService.java
 │   └── VenueTextContentServiceImpl.java
+├── venueask/         # AI venue chat — one-shot ask + persistent chat sessions (RAG with citations)
 ├── ping/             # Reachability probes across the three security tiers
 ├── infrastructure/   # Technical concerns: Spring config, RabbitMQ, Security, MyBatis, Object storage
 ├── shared/           # Common exceptions, utilities, value objects
@@ -354,6 +382,7 @@ Please read our [Contributing Guidelines](.github/CONTRIBUTING.md) and [Code of 
 ## 🧩 Architecture
 
 - **Ollama**: LLM connectivity configured via `spring.ai.ollama.*` (`SPRING_AI_OLLAMA_BASE_URL`, `SPRING_AI_OLLAMA_CHAT_OPTIONS_MODEL`)
+- **AI / RAG**: the `venueask` slice answers questions over the tenant's own venues, grounding the model in the venue profile, extracted text chunks and assets, and returning the cited sources; the one-shot `ask` surface and the persistent `chat` sessions both degrade to `answered=false` when the model is unavailable
 - **Persistence**: MyBatis with XML mappers + PostgreSQL; Liquibase manages system and per-tenant schema migrations
 - **Object storage**: MinIO S3-compatible client (`OBJECTSTORAGE_*`); the `catalog-assets` bucket stays private and clients receive presigned URLs
 - **Messaging**: RabbitMQ consumer for IAM tenant provisioning events (`tenant.created` / `tenant.updated`) bound to the shared `iqkv.events` exchange; `iqkv.messaging.rabbitmq.enabled` toggle — disabled in base profile, enabled per environment
