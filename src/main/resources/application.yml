@@ -108,6 +108,8 @@ iqkv:
       personas:
         concierge: ${CATALOG_VENUE_ASK_PERSONA_CONCIERGE:Adopt a warm, concierge tone. Lead with what the venue offers and suggest a helpful next step when it fits.}
         compliance: ${CATALOG_VENUE_ASK_PERSONA_COMPLIANCE:Answer strictly from the CONTEXT. If the context does not contain the answer, say you do not know. Do not speculate or use outside knowledge.}
+      # Persona applied when a turn names none; pinned to compliance for MVP.
+      default-persona: ${CATALOG_VENUE_ASK_DEFAULT_PERSONA:compliance}
       max-input-chars: ${CATALOG_VENUE_ASK_MAX_INPUT_CHARS:4000}
       max-output-tokens: ${CATALOG_VENUE_ASK_MAX_OUTPUT_TOKENS:1024}
       temperature: ${CATALOG_VENUE_ASK_TEMPERATURE:0.2}

@@ -179,14 +179,20 @@ class VenueAskAssistant {
   }
 
   /**
-   * The configured instruction for {@code persona}, or null when the key is blank or unknown.
+   * The configured instruction for {@code persona}, or null when the key is unknown. A turn that
+   * names no persona resolves to the configured default, so the MVP guarantee does not depend on
+   * the client sending a key.
    */
   private String personaPrompt(final String persona) {
     final Map<String, String> personas = properties.personas();
-    if (persona == null || persona.isBlank() || personas == null) {
+    if (personas == null) {
       return null;
     }
-    final String overlay = personas.get(persona);
+    final String key = persona == null || persona.isBlank() ? properties.defaultPersona() : persona;
+    if (key == null || key.isBlank()) {
+      return null;
+    }
+    final String overlay = personas.get(key);
     return overlay == null || overlay.isBlank() ? null : overlay;
   }
 

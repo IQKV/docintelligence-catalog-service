@@ -50,7 +50,7 @@ class VenueAskServiceImplTest {
   private static final UUID VENUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
   private static final VenueAskProperties PROPERTIES = new VenueAskProperties(
-      true, "You are the venue catalogue assistant.", Map.of("concierge", "Be warm."),
+      true, "You are the venue catalogue assistant.", Map.of("concierge", "Be warm."), "compliance",
       4000, 1024, 0.2, "llama3.2", 12000, 8, 4000, new VenueAskProperties.Guard(true));
 
   @Mock
