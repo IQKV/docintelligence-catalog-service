@@ -80,6 +80,15 @@ public interface VenueTextContentService {
   void delete(UUID id);
 
   /**
+   * Returns the number of text-content rows linked to one venue using a {@code COUNT(*)} query —
+   * no rows are loaded into memory. Returns {@code 0} when the venue has no rows.
+   *
+   * @param venueId the venue to count source texts for
+   * @return source text count for the venue
+   */
+  VenueTextContentDtos.VenueTextContentCountResponse countByVenue(UUID venueId);
+
+  /**
    * Semantic search over text-content rows that have an embedding, optionally scoped to one venue.
    *
    * @param query   natural-language search query

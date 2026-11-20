@@ -119,6 +119,27 @@ public class VenueAssetRestResource {
     return ResponseEntity.ok(venueAssetService.confirmUpload(venueId, id, request, uploadedBy));
   }
 
+  @GetMapping("/count")
+  @Operation(
+      summary = "Count the assets of a venue",
+      description = "Returns total, photo, and document counts for the given venue using "
+                    + "database-level COUNT queries — no assets are loaded into memory. "
+                    + "Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key (e.g. xk7f2b9a). "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Asset counts for the venue",
+                   content = @Content(schema = @Schema(implementation = VenueAssetDtos.VenueAssetCountResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueAssetDtos.VenueAssetCountResponse> count(
+      @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId) {
+    return ResponseEntity.ok(venueAssetService.countAssets(venueId));
+  }
+
   @GetMapping
   @Operation(
       summary = "List the assets of a venue",

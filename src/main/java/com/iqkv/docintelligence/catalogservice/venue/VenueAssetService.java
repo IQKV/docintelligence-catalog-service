@@ -105,5 +105,15 @@ public interface VenueAssetService {
    */
   VenueAssetDtos.VenueAssetResponse getAssetById(UUID assetId);
 
+  /**
+   * Returns the asset count breakdown for one venue — total, photos, and documents — using
+   * three {@code COUNT(*)} queries rather than loading any collection.
+   * Throws {@link VenueNotFoundException} when the venue does not exist.
+   *
+   * @param venueId the venue to count assets for
+   * @return asset counts broken down by type
+   */
+  VenueAssetDtos.VenueAssetCountResponse countAssets(UUID venueId);
+
   void deleteAsset(UUID venueId, UUID assetId);
 }

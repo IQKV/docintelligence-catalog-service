@@ -143,4 +143,11 @@ public final class VenueAssetDtos {
       String fileName,
       int expiresInMinutes) {
   }
+
+  /**
+   * Asset count breakdown for one venue — total, photos, and documents (non-photo assets).
+   * Computed entirely in the database; no collection is loaded.
+   */
+  public record VenueAssetCountResponse(UUID venueId, long total, long photos, long documents) {
+  }
 }

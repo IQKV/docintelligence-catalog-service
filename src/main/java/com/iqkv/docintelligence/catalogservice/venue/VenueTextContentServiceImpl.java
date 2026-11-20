@@ -143,6 +143,12 @@ public class VenueTextContentServiceImpl implements VenueTextContentService {
 
   @Override
   @Transactional(readOnly = true)
+  public VenueTextContentDtos.VenueTextContentCountResponse countByVenue(final UUID venueId) {
+    return new VenueTextContentDtos.VenueTextContentCountResponse(venueId, mapper.countByVenueId(venueId));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public VenueTextContentDtos.VenueTextContentSemanticSearchResponse semanticSearch(
       final String query, final UUID venueId, final int limit) {
     log.info("VenueTextContent semantic search: query='{}', venueId={}, limit={}", query, venueId, limit);

@@ -87,6 +87,26 @@ public class VenueTextContentRestResource {
     return ResponseEntity.ok(service.search(venueId, search, limit, offset));
   }
 
+  @GetMapping("/venue/{venueId}/count")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Count source texts for a venue",
+      description = "Returns the number of text-content rows linked to the given venue "
+                    + "using a database-level COUNT query — no rows are loaded into memory.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Source text count for the venue",
+                   content = @Content(schema = @Schema(implementation = VenueTextContentDtos.VenueTextContentCountResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+  })
+  public ResponseEntity<VenueTextContentDtos.VenueTextContentCountResponse> countByVenue(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID venueId) {
+    return ResponseEntity.ok(service.countByVenue(venueId));
+  }
+
   @GetMapping("/venue/{venueId}")
   @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(

@@ -283,6 +283,16 @@ public class VenueAssetServiceImpl implements VenueAssetService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public VenueAssetDtos.VenueAssetCountResponse countAssets(final UUID venueId) {
+    requireVenue(venueId);
+    final long total = assetMapper.countByVenueId(venueId);
+    final long photos = assetMapper.countPhotosByVenueId(venueId);
+    final long documents = assetMapper.countDocumentsByVenueId(venueId);
+    return new VenueAssetDtos.VenueAssetCountResponse(venueId, total, photos, documents);
+  }
+
+  @Override
   public void deleteAsset(final UUID venueId, final UUID assetId) {
     requireVenue(venueId);
     final VenueAsset asset = assetMapper.findById(assetId)

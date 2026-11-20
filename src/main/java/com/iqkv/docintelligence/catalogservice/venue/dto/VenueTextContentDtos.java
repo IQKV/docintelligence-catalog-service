@@ -109,4 +109,11 @@ public final class VenueTextContentDtos {
       List<VenueTextContentSemanticSearchResult> items,
       long totalElements) {
   }
+
+  /**
+   * Source-text (text-content) count for one venue. Computed by a {@code COUNT(*)} query;
+   * no rows are loaded.
+   */
+  public record VenueTextContentCountResponse(UUID venueId, long total) {
+  }
 }
