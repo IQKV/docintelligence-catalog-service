@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Tenant venue smart notes — user-authored sticky notes attached to a venue, analogous
+         to Google Keep notes. Each note carries a title, HTML content, a background colour,
+         a text[] tags array, the author UUID, an optional link to a venue_assets row, and an
+         explicit sort_order for display ordering within the venue.
+
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before
+         these changesets run, so no schemaName is set on the statements below).
+
+         venue_id is a required app-level FK to venues(id); no DB-level FK is declared because
+         the application enforces the constraint and handles cascade deletes.
+
+         linked_asset_id is an optional app-level reference to a venue_assets row. No DB-level
+         FK — the asset may be deleted independently. -->
+
+    <changeSet id="20261120120000-create-venue-smart-notes" author="iqkv">
+
+        <createTable tableName="venue_smart_notes">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <!-- Required app-level FK to t_{tenantKey}.venues. No DB-level FK. -->
+            <column name="venue_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Note title; NULL when the note has no title. -->
+            <column name="title" type="VARCHAR(500)"/>
+            <!-- HTML content produced by the Mantine rich-text editor. -->
+            <column name="content" type="TEXT"/>
+            <!-- Note card background colour — hex code or design-token name.
+                 NULL means the UI default applies. -->
+            <column name="color" type="VARCHAR(50)"/>
+            <!-- User-defined tags as a PostgreSQL text[] array. -->
+            <column name="tags" type="TEXT[]"/>
+            <!-- UUID of the user who created the note. Set at insert time, never updated. -->
+            <column name="author_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Optional app-level reference to a venue_assets row. No DB-level FK. -->
+            <column name="linked_asset_id" type="UUID"/>
+            <!-- Display order within the venue. Lower values appear first;
+                 ties broken by created_at ascending. -->
+            <column name="sort_order" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Whether the note is pinned. Pinned notes are displayed prominently in the UI. -->
+            <column name="pinned" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="venue_smart_notes" indexName="idx_vsn_venue_id">
+            <column name="venue_id"/>
+        </createIndex>
+
+        <!-- Covers the default sort: venue_id + sort_order + created_at. -->
+        <createIndex tableName="venue_smart_notes" indexName="idx_vsn_venue_id_sort">
+            <column name="venue_id"/>
+            <column name="sort_order"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <createIndex tableName="venue_smart_notes" indexName="idx_vsn_author_id">
+            <column name="author_id"/>
+        </createIndex>
+
+        <!-- Partial indexes for the pinned filter — small and fast for UI badge counts. -->
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_vsn_venue_id_pinned
+            ON venue_smart_notes (venue_id)
+            WHERE pinned = true
+        </sql>
+
+        <!-- GIN index on tags for array containment queries (@> operator). -->
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_vsn_tags_gin
+            ON venue_smart_notes
+            USING gin (tags)
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_vsn_tags_gin</sql>
+            <sql>DROP INDEX IF EXISTS idx_vsn_venue_id_pinned</sql>
+            <dropIndex tableName="venue_smart_notes" indexName="idx_vsn_author_id"/>
+            <dropIndex tableName="venue_smart_notes" indexName="idx_vsn_venue_id_sort"/>
+            <dropIndex tableName="venue_smart_notes" indexName="idx_vsn_venue_id"/>
+            <dropTable tableName="venue_smart_notes"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>
