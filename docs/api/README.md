@@ -147,12 +147,12 @@ Conversational chat grounded in the tenant's own venue catalogue. Requires `TENA
 
 The routes mirror the AI chat client contract (`POST`, `GET /sessions`, `GET /sessions/{sessionId}/messages`, `DELETE /sessions/{sessionId}`), so a chat client can point at this service by swapping the endpoint base only.
 
-| Method   | Path                                  | Auth                        | Description                                                                                                                                                            |
-| -------- | ------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method   | Path                                  | Auth                        | Description                                                                                                                                                                                                    |
+| -------- | ------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST`   | `/chat`                               | JWT `TENANT_OWNER`/`MEMBER` | Send one message and return the reply; a null `sessionId` starts a session, otherwise the owned session is resumed; an optional `venueId` grounds the turn in one venue and returns the source chunks it cited |
-| `GET`    | `/chat/sessions`                      | JWT `TENANT_OWNER`/`MEMBER` | List the caller's own sessions, most recently updated first; paginated via `limit` (default 20) and `offset`                                                           |
-| `GET`    | `/chat/sessions/{sessionId}/messages` | JWT `TENANT_OWNER`/`MEMBER` | List an owned session's messages, oldest first; paginated via `limit` (default 50) and `offset`                                                                        |
-| `DELETE` | `/chat/sessions/{sessionId}`          | JWT `TENANT_OWNER`/`MEMBER` | Delete an owned session together with its messages; returns `204`                                                                                                      |
+| `GET`    | `/chat/sessions`                      | JWT `TENANT_OWNER`/`MEMBER` | List the caller's own sessions, most recently updated first; paginated via `limit` (default 20) and `offset`                                                                                                   |
+| `GET`    | `/chat/sessions/{sessionId}/messages` | JWT `TENANT_OWNER`/`MEMBER` | List an owned session's messages, oldest first; paginated via `limit` (default 50) and `offset`                                                                                                                |
+| `DELETE` | `/chat/sessions/{sessionId}`          | JWT `TENANT_OWNER`/`MEMBER` | Delete an owned session together with its messages; returns `204`                                                                                                                                              |
 
 `POST /chat` takes `sessionId?`, `venueId?`, `content`, `model?` and `persona?`. A blank `persona` resolves server-side to the configured default overlay (`iqkv.catalog.venue-ask.default-persona`, pinned to `compliance` for MVP); an unknown key falls back to the base assistant. The persona names a key configured on the server — client input never reaches the system message.
 
@@ -178,6 +178,25 @@ Raw or markdown text chunks extracted from venue source documents. Reads are ope
 | `DELETE` | `/venue-text-contents/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Permanently delete the row; returns `204`; returns `404` when the row does not exist                                                             |
 
 Text-content paths answer `400` when the tenant ID cannot be resolved, `401` for a missing or invalid JWT, and `403` when the caller lacks the required authority.
+
+---
+
+### Venue Smart Notes (Tenant Surface)
+
+User-authored sticky notes attached to a venue (Google Keep-style): title, HTML content, background colour, `text[]` tags, author, optional asset link, sort order and pin flag. Reads and creates are open to `MEMBER`, `TENANT_OWNER` and `ADMIN`; edits, deletes and pin toggles require `TENANT_OWNER` or `ADMIN`. The author is recorded from the JWT `user_id` claim at create time and is never taken from the request body. Tenant context is resolved from the `X-Tenant-ID` header or the JWT `tenant_id` claim.
+
+| Method   | Path                                       | Auth                                | Description                                                                                                                                    |
+| -------- | ------------------------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/venue-smart-notes/venue/{venueId}`       | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | List notes for a venue, ordered by `sortOrder` then `createdAt` (`direction` param: `ASC`/`DESC`); optional `pinned` filter                    |
+| `GET`    | `/venue-smart-notes/venue/{venueId}/count` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Count notes for a venue                                                                                                                        |
+| `GET`    | `/venue-smart-notes/{id}`                  | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Fetch a single note; returns `404` when it does not exist                                                                                      |
+| `GET`    | `/venue-smart-notes/{id}/asset`            | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Load the venue asset linked to the note; returns `404` when the note has no linked asset                                                       |
+| `POST`   | `/venue-smart-notes`                       | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Create a note from `{venueId, title?, content?, color?, tags?, linkedAssetId?, sortOrder?, pinned?}`; author from JWT `user_id`; returns `201` |
+| `PATCH`  | `/venue-smart-notes/{id}`                  | JWT `TENANT_OWNER`/`ADMIN`          | Update title/content/color/tags/linkedAssetId/sortOrder/pinned; only non-null fields are overwritten                                           |
+| `PUT`    | `/venue-smart-notes/{id}/pinned`           | JWT `TENANT_OWNER`/`ADMIN`          | Pin or unpin a note in a single call from `{pinned: true/false}`                                                                               |
+| `DELETE` | `/venue-smart-notes/{id}`                  | JWT `TENANT_OWNER`/`ADMIN`          | Permanently delete the note; returns `204`; returns `404` when the row does not exist                                                          |
+
+Smart-note paths answer `400` when the tenant ID cannot be resolved, `401` for a missing or invalid JWT, and `403` when the caller lacks the required authority.
 
 ---
 
@@ -241,6 +260,22 @@ Mirror of the tenant text-content surface, scoped to the tenant named in the `{t
 | `PATCH`  | `/admin/{tenantKey}/venue-text-contents/{id}`            | JWT `PLATFORM_ADMIN` | Update `content`; returns `404` when the row does not exist                                     |
 | `POST`   | `/admin/{tenantKey}/venue-text-contents/{id}/link`       | JWT `PLATFORM_ADMIN` | Set `venueId` on a venue-less row; returns `404` when the row does not exist                    |
 | `DELETE` | `/admin/{tenantKey}/venue-text-contents/{id}`            | JWT `PLATFORM_ADMIN` | Permanently delete the row; returns `204`; returns `404` when the row does not exist            |
+
+---
+
+### Venue Smart Notes (Admin Surface)
+
+Mirror of the tenant smart-note surface, scoped to the tenant named in the `{tenantKey}` path variable. Requires `PLATFORM_ADMIN` authority.
+
+| Method   | Path                                                   | Auth                 | Description                                                                                                   |
+| -------- | ------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/admin/{tenantKey}/venue-smart-notes/venue/{venueId}` | JWT `PLATFORM_ADMIN` | List notes for a venue, ordered by `sortOrder` then `createdAt` (`direction` param); optional `pinned` filter |
+| `GET`    | `/admin/{tenantKey}/venue-smart-notes/{id}`            | JWT `PLATFORM_ADMIN` | Fetch a single note; returns `404` when it does not exist                                                     |
+| `GET`    | `/admin/{tenantKey}/venue-smart-notes/{id}/asset`      | JWT `PLATFORM_ADMIN` | Load the venue asset linked to the note; returns `404` when the note has no linked asset                      |
+| `POST`   | `/admin/{tenantKey}/venue-smart-notes`                 | JWT `PLATFORM_ADMIN` | Create a note; author from the admin's JWT `user_id`; returns `201`                                           |
+| `PATCH`  | `/admin/{tenantKey}/venue-smart-notes/{id}`            | JWT `PLATFORM_ADMIN` | Update title/content/color/tags/linkedAssetId/sortOrder/pinned; only non-null fields are overwritten          |
+| `PUT`    | `/admin/{tenantKey}/venue-smart-notes/{id}/pinned`     | JWT `PLATFORM_ADMIN` | Pin or unpin a note in a single call                                                                          |
+| `DELETE` | `/admin/{tenantKey}/venue-smart-notes/{id}`            | JWT `PLATFORM_ADMIN` | Permanently delete the note; returns `204`; returns `404` when the row does not exist                         |
 
 ---
 

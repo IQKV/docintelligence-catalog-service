@@ -31,5 +31,14 @@
  * {@link com.iqkv.docintelligence.catalogservice.venue.AdminVenueAssetRestResource}). They use the
  * same tenant scoping and the two-phase presigned upload flow. The {@code VenueAsset} domain model
  * and {@code VenueAssetMapper} live in the shared artifact too.
+ *
+ * <p>Venue smart notes — user-authored sticky notes attached to a venue (Google Keep-style, with
+ * title, HTML content, colour, tags, author, optional asset link, sort order and pin flag) — are
+ * served by {@link com.iqkv.docintelligence.catalogservice.venue.VenueSmartNoteRestResource}
+ * (tenant) and {@link com.iqkv.docintelligence.catalogservice.venue.AdminVenueSmartNoteRestResource}
+ * (admin). Reads and creates are open to any tenant member; edits and deletes require
+ * {@code TENANT_OWNER} or {@code ADMIN} on the tenant side, {@code PLATFORM_ADMIN} on the admin
+ * side. The {@code VenueSmartNote} model and {@code VenueSmartNoteMapper} live in the shared
+ * artifact.
  */
 package com.iqkv.docintelligence.catalogservice.venue;

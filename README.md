@@ -10,6 +10,7 @@ This template provides:
 - **Venue asset uploads** — two-phase presigned MinIO upload for venue photos and attachments (initiate → direct upload → confirm) nested under the owning venue, with tenant and admin surfaces mirrored
 - **Venue asset import** — venue-less document upload (PDF/CSV/image) that the processing worker turns into a venue record; the client polls the asset until its derived venue is linked
 - **Venue text contents** — raw/markdown text chunks extracted from venue sources, with keyword and semantic search plus venue linking, on both the tenant and admin surfaces
+- **Venue smart notes** — user-authored sticky notes (title, HTML body, colour, tags, pin, sort order, optional asset link) attached to a venue, with reads/creates open to members and edits/deletes restricted to tenant owners, on both the tenant and admin surfaces
 - **AI venue enrichment** — "fill from source" assistant that extracts one concrete `metadata.items` field from a preloaded venue source document for the UI to review and apply
 - **AI venue chat** — retrieval-augmented Q&A over the tenant's own venues: a stateless one-shot `ask` surface (single venue or ranked list) plus persistent chat sessions, each returning the source chunks the answer cited so the UI can show and act on citations
 - **Master venue catalog** — a platform-curated venue directory exposed read-only to tenants, including asset/photo reads, and with full CRUD plus provenance-aware asset reads to platform administrators
@@ -124,11 +125,11 @@ Applying an extracted value is done through `PATCH /venues/{venueId}/metadata`.
 
 Retrieval-augmented question answering over the tenant's own venue data — the answer is returned together with the source chunks it was grounded in, so the UI can show citations. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. When the AI feature is off or the model is unreachable, the surface degrades to `answered=false` (with any sources found) rather than failing.
 
-| Method | Path                       | Auth                        | Description                                                                                                                        |
-| :----- | :------------------------- | :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/venues/{venueId}/ask`    | JWT `TENANT_OWNER`/`MEMBER` | Answer a natural-language question grounded in one venue's profile, source text chunks and assets; returns the answer with `sources` |
-| `GET`  | `/venues/{venueId}/context` | JWT `TENANT_OWNER`/`MEMBER` | Return the venue's retrieved context — profile, source chunks and assets — without any model call                                  |
-| `POST` | `/venues/ask`              | JWT `TENANT_OWNER`/`MEMBER` | Answer a question grounded in the ranked list of venues; the query is planned into hard filters plus a residual vector query, and the reply carries the ranked venues and applied filters |
+| Method | Path                        | Auth                        | Description                                                                                                                                                                               |
+| :----- | :-------------------------- | :-------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/venues/{venueId}/ask`     | JWT `TENANT_OWNER`/`MEMBER` | Answer a natural-language question grounded in one venue's profile, source text chunks and assets; returns the answer with `sources`                                                      |
+| `GET`  | `/venues/{venueId}/context` | JWT `TENANT_OWNER`/`MEMBER` | Return the venue's retrieved context — profile, source chunks and assets — without any model call                                                                                         |
+| `POST` | `/venues/ask`               | JWT `TENANT_OWNER`/`MEMBER` | Answer a question grounded in the ranked list of venues; the query is planned into hard filters plus a residual vector query, and the reply carries the ranked venues and applied filters |
 
 Each cited source carries `sourceTextId`, `assetId`, `label`, verbatim `snippet`, `page` (1-based; `null` when the source has no pages) and `similarity`. The ask paths answer `400` on an empty question, a prompt-injection rejection or an unresolvable tenant, `401` for a missing or invalid JWT, `403` when the caller lacks the required authority, and `404` when the venue does not exist.
 
@@ -136,12 +137,12 @@ Each cited source carries `sourceTextId`, `assetId`, `label`, verbatim `snippet`
 
 Conversational chat over the tenant's venue catalogue, with sessions and messages persisted in the active tenant schema and owned by the authenticated user — another user's session resolves to `404`. Requires `TENANT_OWNER` or `MEMBER` authority; tenant context is resolved from the `X-Tenant-ID` header or JWT `tenant_id` claim. The routes mirror the UI chat client contract so a client can point here by swapping the endpoint base only.
 
-| Method   | Path                                  | Auth                        | Description                                                                                                                                              |
-| :------- | :------------------------------------ | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method   | Path                                  | Auth                        | Description                                                                                                                                                                                      |
+| :------- | :------------------------------------ | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST`   | `/chat`                               | JWT `TENANT_OWNER`/`MEMBER` | Send one message and return the reply; a null `sessionId` starts a session, an owned `sessionId` resumes it; an optional `venueId` grounds the turn in one venue and returns the cited `sources` |
-| `GET`    | `/chat/sessions`                      | JWT `TENANT_OWNER`/`MEMBER` | List the caller's sessions, most recently updated first; paginated via `limit` (default 20) / `offset`                                                    |
-| `GET`    | `/chat/sessions/{sessionId}/messages` | JWT `TENANT_OWNER`/`MEMBER` | List an owned session's messages, oldest first; paginated via `limit` (default 50) / `offset`                                                             |
-| `DELETE` | `/chat/sessions/{sessionId}`          | JWT `TENANT_OWNER`/`MEMBER` | Delete an owned session together with its messages; returns `204`                                                                                         |
+| `GET`    | `/chat/sessions`                      | JWT `TENANT_OWNER`/`MEMBER` | List the caller's sessions, most recently updated first; paginated via `limit` (default 20) / `offset`                                                                                           |
+| `GET`    | `/chat/sessions/{sessionId}/messages` | JWT `TENANT_OWNER`/`MEMBER` | List an owned session's messages, oldest first; paginated via `limit` (default 50) / `offset`                                                                                                    |
+| `DELETE` | `/chat/sessions/{sessionId}`          | JWT `TENANT_OWNER`/`MEMBER` | Delete an owned session together with its messages; returns `204`                                                                                                                                |
 
 `POST /chat` takes `sessionId?`, `venueId?`, `content`, `model?` and `persona?`. A blank `persona` resolves server-side to the configured default overlay (`iqkv.catalog.venue-ask.default-persona`, pinned to `compliance` for MVP); an unknown key falls back to the base assistant — the persona names a server-side key, so client input never reaches the system message. Cited `sources` are persisted on the assistant message so they survive a reload; a catalogue-grounded reply (no `venueId`) cites nothing. When the AI feature is off or the model is unreachable the endpoint returns `200` with a canned reply. Chat paths answer `400` on an empty message, a prompt-injection rejection or an unresolvable tenant, `401`, `403`, and `404` when the session does not exist or is not owned by the caller.
 
@@ -159,6 +160,21 @@ Raw or markdown text chunks extracted from venue source documents. Reads require
 | `PATCH`  | `/venue-text-contents/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Update `content`; only non-null fields are overwritten                                                |
 | `POST`   | `/venue-text-contents/{id}/link`       | JWT `TENANT_OWNER`/`ADMIN`          | Set `venueId` on a row created before the venue was derived                                           |
 | `DELETE` | `/venue-text-contents/{id}`            | JWT `TENANT_OWNER`/`ADMIN`          | Permanently deletes the row; returns `204`                                                            |
+
+### Venue smart notes
+
+User-authored sticky notes attached to a venue (Google Keep-style): title, HTML content, background colour, `text[]` tags, author, optional asset link, sort order and pin flag. Reads and creates are open to any tenant member; edits, deletes and pin toggles require `TENANT_OWNER` or `ADMIN`. The author is recorded from the JWT `user_id` claim at create time and is never taken from the request body.
+
+| Method   | Path                                       | Auth                                | Description                                                                                                                 |
+| :------- | :----------------------------------------- | :---------------------------------- | :-------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/venue-smart-notes/venue/{venueId}`       | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | List notes for a venue, ordered by `sortOrder` then `createdAt` (`direction` param: `ASC`/`DESC`); optional `pinned` filter |
+| `GET`    | `/venue-smart-notes/venue/{venueId}/count` | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Count notes for a venue                                                                                                     |
+| `GET`    | `/venue-smart-notes/{id}`                  | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Fetch a single note; returns `404` when it does not exist                                                                   |
+| `GET`    | `/venue-smart-notes/{id}/asset`            | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Load the venue asset linked to the note; returns `404` when the note has no linked asset                                    |
+| `POST`   | `/venue-smart-notes`                       | JWT `MEMBER`/`TENANT_OWNER`/`ADMIN` | Create a note; author from JWT `user_id`; returns `201`                                                                     |
+| `PATCH`  | `/venue-smart-notes/{id}`                  | JWT `TENANT_OWNER`/`ADMIN`          | Update title/content/color/tags/linkedAssetId/sortOrder/pinned; only non-null fields are overwritten                        |
+| `PUT`    | `/venue-smart-notes/{id}/pinned`           | JWT `TENANT_OWNER`/`ADMIN`          | Pin or unpin a note in a single call                                                                                        |
+| `DELETE` | `/venue-smart-notes/{id}`                  | JWT `TENANT_OWNER`/`ADMIN`          | Permanently deletes the note; returns `204`                                                                                 |
 
 ### Admin
 
@@ -215,6 +231,10 @@ Venue-less import on behalf of the tenant named in the `{tenantKey}` path variab
 #### Admin venue text contents
 
 Raw/markdown text-content rows on behalf of the tenant named in the `{tenantKey}` path variable (`/api/v1/catalog/admin/{tenantKey}/venue-text-contents`). Requires the `PLATFORM_ADMIN` authority. Mirrors the tenant surface: search, list by venue, get, semantic search, create, patch, link, and delete.
+
+#### Admin venue smart notes
+
+User-authored smart notes on behalf of the tenant named in the `{tenantKey}` path variable (`/api/v1/catalog/admin/{tenantKey}/venue-smart-notes`). Requires the `PLATFORM_ADMIN` authority. Mirrors the tenant surface: list by venue (with `direction` and `pinned` filters), get, linked-asset load, create (author from the admin's JWT `user_id`), patch, pin toggle, and delete.
 
 > Auth legend: `public` = no token required; `JWT` = valid Bearer token required; `JWT MEMBER` = tenant member authority required; `JWT TENANT_OWNER/MEMBER` = tenant owner or member authority required; `JWT TENANT_OWNER/ADMIN` = tenant owner or admin authority required; `JWT PLATFORM_ADMIN` = platform administrator authority required.
 
@@ -351,11 +371,12 @@ docker compose -f compose.container.yaml up -d
 │   │   ├── MasterVenueRestResource.java
 │   │   ├── MasterVenueService.java
 │   │   └── MasterVenueServiceImpl.java
-│   ├── venue/          # Tenant venue catalog — tenant CRUD + admin full CRUD + semantic search + assets + text contents + enrichment
+│   ├── venue/          # Tenant venue catalog — tenant CRUD + admin full CRUD + semantic search + assets + text contents + smart notes + enrichment
 │   │   ├── dto/
 │   │   ├── AdminVenueAssetImportRestResource.java
 │   │   ├── AdminVenueAssetRestResource.java
 │   │   ├── AdminVenueRestResource.java
+│   │   ├── AdminVenueSmartNoteRestResource.java
 │   │   ├── AdminVenueTextContentRestResource.java
 │   │   ├── VenueAssetImportRestResource.java
 │   │   ├── VenueAssetRestResource.java
@@ -366,6 +387,9 @@ docker compose -f compose.container.yaml up -d
 │   │   ├── VenueRestResource.java
 │   │   ├── VenueService.java
 │   │   ├── VenueServiceImpl.java
+│   │   ├── VenueSmartNoteRestResource.java
+│   │   ├── VenueSmartNoteService.java
+│   │   ├── VenueSmartNoteServiceImpl.java
 │   │   ├── VenueTextContentRestResource.java
 │   │   ├── VenueTextContentService.java
 │   │   └── VenueTextContentServiceImpl.java
