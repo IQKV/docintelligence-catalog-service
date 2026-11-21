@@ -17,6 +17,7 @@
 package com.iqkv.docintelligence.catalogservice.venue;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.infrastructure.security.JwtClaimNames;
@@ -52,8 +53,9 @@ import org.springframework.web.bind.annotation.RestController;
  * ({@code /api/v1/catalog/venue-smart-notes}).
  *
  * <p>Reads and creates are open to {@code MEMBER}, {@code TENANT_OWNER} and {@code ADMIN} — any
- * tenant member may author a note. Edits and deletes require {@code TENANT_OWNER} or
- * {@code ADMIN}. The note author is recorded from the JWT {@code user_id} claim at create time
+ * tenant member may author a note. Edits (patch/pin) are limited to the note's author, with a
+ * {@code TENANT_OWNER}/{@code ADMIN} override for any note; deletes require {@code TENANT_OWNER}
+ * or {@code ADMIN}. The note author is recorded from the JWT {@code user_id} claim at create time
  * and is never taken from the request body. Tenant context is resolved from the
  * {@code X-Tenant-ID} header or the JWT {@code tenant_id} claim by
  * {@code TenantExtractionFilter}.
@@ -183,12 +185,12 @@ public class VenueSmartNoteRestResource {
   }
 
   @PatchMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Partially update a smart note",
-      description = "Updates the given note. Only non-null fields are overwritten. "
-                    + "Requires TENANT_OWNER or ADMIN authority. Responds 404 when the note "
-                    + "does not exist.")
+      description = "Updates the given note. Only non-null fields are overwritten. The caller must "
+                    + "be the note's author; TENANT_OWNER and ADMIN callers may edit any note. "
+                    + "Responds 404 when the note does not exist.")
   @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
              description = "8-char alphanumeric tenant key. Can be omitted when the JWT carries a tenant_id claim.")
   @ApiResponses({
@@ -196,21 +198,23 @@ public class VenueSmartNoteRestResource {
                    content = @Content(schema = @Schema(implementation = VenueSmartNoteDtos.VenueSmartNoteResponse.class))),
       @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — caller is not the note author and holds no owner/admin authority", content = @Content),
       @ApiResponse(responseCode = "404", description = "Note not found", content = @Content)
   })
   public ResponseEntity<VenueSmartNoteDtos.VenueSmartNoteResponse> patch(
+      @AuthenticationPrincipal final Jwt jwt,
       @Parameter(description = "Note UUID") @PathVariable final UUID id,
       @RequestBody final VenueSmartNoteDtos.VenueSmartNotePatchRequest request) {
-    return ResponseEntity.ok(service.patch(id, request));
+    return ResponseEntity.ok(service.patch(id, request, callerId(jwt), canEditAnyNote(jwt)));
   }
 
   @PutMapping("/{id}/pinned")
-  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Pin or unpin a smart note",
-      description = "Sets the pin flag on one note in a single call. Requires TENANT_OWNER or "
-                    + "ADMIN authority. Responds 404 when the note does not exist.")
+      description = "Sets the pin flag on one note in a single call. The caller must be the note's "
+                    + "author; TENANT_OWNER and ADMIN callers may pin any note. Responds 404 when "
+                    + "the note does not exist.")
   @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
              description = "8-char alphanumeric tenant key. Can be omitted when the JWT carries a tenant_id claim.")
   @ApiResponses({
@@ -218,13 +222,14 @@ public class VenueSmartNoteRestResource {
                    content = @Content(schema = @Schema(implementation = VenueSmartNoteDtos.VenueSmartNoteResponse.class))),
       @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
-      @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — caller is not the note author and holds no owner/admin authority", content = @Content),
       @ApiResponse(responseCode = "404", description = "Note not found", content = @Content)
   })
   public ResponseEntity<VenueSmartNoteDtos.VenueSmartNoteResponse> setPinned(
+      @AuthenticationPrincipal final Jwt jwt,
       @Parameter(description = "Note UUID") @PathVariable final UUID id,
       @Valid @RequestBody final VenueSmartNoteDtos.VenueSmartNoteSetPinnedRequest request) {
-    return ResponseEntity.ok(service.setPinned(id, request.pinned()));
+    return ResponseEntity.ok(service.setPinned(id, request.pinned(), callerId(jwt), canEditAnyNote(jwt)));
   }
 
   @DeleteMapping("/{id}")
@@ -246,5 +251,16 @@ public class VenueSmartNoteRestResource {
       @Parameter(description = "Note UUID") @PathVariable final UUID id) {
     service.delete(id);
     return ResponseEntity.noContent().build();
+  }
+
+  private static UUID callerId(final Jwt jwt) {
+    return UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+  }
+
+  /** Tenant owners and admins may edit any note, not just their own. */
+  private static boolean canEditAnyNote(final Jwt jwt) {
+    final List<String> authorities = jwt.getClaimAsStringList(JwtClaimNames.AUTHORITIES);
+    return authorities != null
+        && (authorities.contains("TENANT_OWNER") || authorities.contains("ADMIN"));
   }
 }

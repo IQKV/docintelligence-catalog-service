@@ -26,6 +26,7 @@ import com.iqkv.docintelligence.venue.VenueAsset;
 import com.iqkv.docintelligence.venue.VenueAssetMapper;
 import com.iqkv.docintelligence.venue.VenueSmartNote;
 import com.iqkv.docintelligence.venue.VenueSmartNoteMapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,8 +77,11 @@ public class VenueSmartNoteServiceImpl implements VenueSmartNoteService {
 
   @Override
   public VenueSmartNoteDtos.VenueSmartNoteResponse patch(
-      final UUID id, final VenueSmartNoteDtos.VenueSmartNotePatchRequest request) {
-    require(id);
+      final UUID id,
+      final VenueSmartNoteDtos.VenueSmartNotePatchRequest request,
+      final UUID actorId,
+      final boolean canEditAnyNote) {
+    requireCanEdit(require(id), actorId, canEditAnyNote);
     if (request.title() != null) {
       mapper.updateTitle(id, request.title());
     }
@@ -109,8 +113,10 @@ public class VenueSmartNoteServiceImpl implements VenueSmartNoteService {
   }
 
   @Override
-  public VenueSmartNoteDtos.VenueSmartNoteResponse setPinned(final UUID id, final boolean pinned) {
-    require(id);
+  public VenueSmartNoteDtos.VenueSmartNoteResponse setPinned(final UUID id, final boolean pinned,
+                                                             final UUID actorId,
+                                                             final boolean canEditAnyNote) {
+    requireCanEdit(require(id), actorId, canEditAnyNote);
     mapper.updatePinned(id, pinned);
     return VenueSmartNoteDtoMapper.toResponse(require(id));
   }
@@ -137,5 +143,16 @@ public class VenueSmartNoteServiceImpl implements VenueSmartNoteService {
   private VenueSmartNote require(final UUID id) {
     return mapper.findById(id)
         .orElseThrow(() -> new VenueSmartNoteNotFoundException(id));
+  }
+
+  /**
+   * Ownership gate for note mutations: only the author may change a note, unless the caller
+   * holds the TENANT_OWNER / ADMIN override.
+   */
+  private void requireCanEdit(final VenueSmartNote note, final UUID actorId,
+                              final boolean canEditAnyNote) {
+    if (!canEditAnyNote && !note.getAuthorId().equals(actorId)) {
+      throw new AccessDeniedException("Only the note author may modify this note.");
+    }
   }
 }

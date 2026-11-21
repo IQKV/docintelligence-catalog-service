@@ -25,8 +25,10 @@ import com.iqkv.docintelligence.catalogservice.venue.dto.VenueSmartNoteDtos;
  * Use cases over venue smart-note rows in the active tenant schema.
  *
  * <p>Every method that takes an id throws {@link VenueSmartNoteNotFoundException} when no such
- * row exists. Edits and deletes are guarded at the HTTP layer so only tenant owners (or a
- * platform admin on the admin surface) may invoke the write methods.
+ * row exists. Any tenant member may create a note; {@code patch} and {@code setPinned} require the
+ * caller to be the note's author unless {@code canEditAnyNote} is set (tenant-owner / admin
+ * override). Deletes stay restricted to tenant owners (or a platform admin on the admin surface)
+ * at the HTTP layer.
  */
 public interface VenueSmartNoteService {
 
@@ -59,9 +61,18 @@ public interface VenueSmartNoteService {
   /**
    * Partially updates a smart note. Only non-null request fields are overwritten.
    *
+   * <p>{@code actorId} is the caller's user id, resolved from the JWT by the REST resource. The
+   * caller must be the note's author unless {@code canEditAnyNote} is {@code true}
+   * (TENANT_OWNER / ADMIN override).
+   *
    * @throws VenueSmartNoteNotFoundException when the row does not exist
+   * @throws org.springframework.security.access.AccessDeniedException when the caller is neither the
+   *     author nor privileged
    */
-  VenueSmartNoteDtos.VenueSmartNoteResponse patch(UUID id, VenueSmartNoteDtos.VenueSmartNotePatchRequest request);
+  VenueSmartNoteDtos.VenueSmartNoteResponse patch(UUID id,
+                                                  VenueSmartNoteDtos.VenueSmartNotePatchRequest request,
+                                                  UUID actorId,
+                                                  boolean canEditAnyNote);
 
   /**
    * Deletes one smart note.
@@ -73,9 +84,16 @@ public interface VenueSmartNoteService {
   /**
    * Sets the pin flag on one note in a single call. Returns the updated row.
    *
+   * <p>{@code actorId} is the caller's user id, resolved from the JWT by the REST resource. The
+   * caller must be the note's author unless {@code canEditAnyNote} is {@code true}
+   * (TENANT_OWNER / ADMIN override).
+   *
    * @throws VenueSmartNoteNotFoundException when the row does not exist
+   * @throws org.springframework.security.access.AccessDeniedException when the caller is neither the
+   *     author nor privileged
    */
-  VenueSmartNoteDtos.VenueSmartNoteResponse setPinned(UUID id, boolean pinned);
+  VenueSmartNoteDtos.VenueSmartNoteResponse setPinned(UUID id, boolean pinned, UUID actorId,
+                                                      boolean canEditAnyNote);
 
   /**
    * Loads the venue asset linked to a note, so the UI can render it inline.

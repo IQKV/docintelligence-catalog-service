@@ -178,10 +178,12 @@ public class AdminVenueSmartNoteRestResource {
   public ResponseEntity<VenueSmartNoteDtos.VenueSmartNoteResponse> patch(
       @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
       @Parameter(description = "Note UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt,
       @RequestBody final VenueSmartNoteDtos.VenueSmartNotePatchRequest request) {
     try {
       TenantContext.setCurrentTenant(tenantKey);
-      return ResponseEntity.ok(service.patch(id, request));
+      final UUID actorId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+      return ResponseEntity.ok(service.patch(id, request, actorId, true));
     } finally {
       TenantContext.clear();
     }
@@ -202,10 +204,12 @@ public class AdminVenueSmartNoteRestResource {
   public ResponseEntity<VenueSmartNoteDtos.VenueSmartNoteResponse> setPinned(
       @Parameter(description = "8-char tenant key") @PathVariable final String tenantKey,
       @Parameter(description = "Note UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueSmartNoteDtos.VenueSmartNoteSetPinnedRequest request) {
     try {
       TenantContext.setCurrentTenant(tenantKey);
-      return ResponseEntity.ok(service.setPinned(id, request.pinned()));
+      final UUID actorId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+      return ResponseEntity.ok(service.setPinned(id, request.pinned(), actorId, true));
     } finally {
       TenantContext.clear();
     }

@@ -43,6 +43,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 class VenueSmartNoteServiceImplTest {
@@ -135,7 +136,7 @@ class VenueSmartNoteServiceImplTest {
     final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest(
         null, null, "#e8f5e9", null, null, null, null);
 
-    service.patch(id, request);
+    service.patch(id, request, UUID.randomUUID(), true);
 
     verify(mapper).updateColor(id, "#e8f5e9");
     verify(mapper, never()).updateTitle(eq(id), any());
@@ -154,7 +155,7 @@ class VenueSmartNoteServiceImplTest {
     final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest(
         "title", "content", "red", List.of("a"), assetId, 2, true);
 
-    service.patch(id, request);
+    service.patch(id, request, UUID.randomUUID(), true);
 
     verify(mapper).updateTitle(id, "title");
     verify(mapper).updateContent(id, "content");
@@ -173,7 +174,7 @@ class VenueSmartNoteServiceImplTest {
     final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest(
         null, null, null, null, null, null, null);
 
-    final var result = service.patch(id, request);
+    final var result = service.patch(id, request, UUID.randomUUID(), true);
 
     assertThat(result.id()).isEqualTo(id);
     verify(mapper, never()).updateTitle(eq(id), any());
@@ -187,8 +188,48 @@ class VenueSmartNoteServiceImplTest {
     when(mapper.findById(id)).thenReturn(Optional.empty());
     final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest("t", null, null, null, null, null, null);
 
-    assertThatThrownBy(() -> service.patch(id, request))
+    assertThatThrownBy(() -> service.patch(id, request, UUID.randomUUID(), false))
         .isInstanceOf(VenueSmartNoteNotFoundException.class);
+  }
+
+  @Test
+  @DisplayName("patch lets the author edit their own note")
+  void patchAllowsAuthor() {
+    final UUID id = UUID.randomUUID();
+    final VenueSmartNote existing = note(id);
+    when(mapper.findById(id)).thenReturn(Optional.of(existing));
+    final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest(
+        "new title", null, null, null, null, null, null);
+
+    service.patch(id, request, existing.getAuthorId(), false);
+
+    verify(mapper).updateTitle(id, "new title");
+  }
+
+  @Test
+  @DisplayName("patch rejects a non-author member and writes nothing")
+  void patchRejectsNonAuthor() {
+    final UUID id = UUID.randomUUID();
+    when(mapper.findById(id)).thenReturn(Optional.of(note(id)));
+    final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest(
+        "new title", null, null, null, null, null, null);
+
+    assertThatThrownBy(() -> service.patch(id, request, UUID.randomUUID(), false))
+        .isInstanceOf(AccessDeniedException.class);
+    verify(mapper, never()).updateTitle(eq(id), any());
+  }
+
+  @Test
+  @DisplayName("patch lets a privileged caller edit someone else's note")
+  void patchAllowsPrivilegedOnOtherNote() {
+    final UUID id = UUID.randomUUID();
+    when(mapper.findById(id)).thenReturn(Optional.of(note(id)));
+    final var request = new VenueSmartNoteDtos.VenueSmartNotePatchRequest(
+        "new title", null, null, null, null, null, null);
+
+    service.patch(id, request, UUID.randomUUID(), true);
+
+    verify(mapper).updateTitle(id, "new title");
   }
 
   @Test
@@ -219,9 +260,20 @@ class VenueSmartNoteServiceImplTest {
     final UUID id = UUID.randomUUID();
     when(mapper.findById(id)).thenReturn(Optional.of(note(id)));
 
-    service.setPinned(id, true);
+    service.setPinned(id, true, UUID.randomUUID(), true);
 
     verify(mapper).updatePinned(id, true);
+  }
+
+  @Test
+  @DisplayName("setPinned rejects a non-author member")
+  void setPinnedRejectsNonAuthor() {
+    final UUID id = UUID.randomUUID();
+    when(mapper.findById(id)).thenReturn(Optional.of(note(id)));
+
+    assertThatThrownBy(() -> service.setPinned(id, true, UUID.randomUUID(), false))
+        .isInstanceOf(AccessDeniedException.class);
+    verify(mapper, never()).updatePinned(any(), anyBoolean());
   }
 
   @Test
@@ -230,7 +282,7 @@ class VenueSmartNoteServiceImplTest {
     final UUID id = UUID.randomUUID();
     when(mapper.findById(id)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.setPinned(id, false))
+    assertThatThrownBy(() -> service.setPinned(id, false, UUID.randomUUID(), true))
         .isInstanceOf(VenueSmartNoteNotFoundException.class);
     verify(mapper, never()).updatePinned(any(), anyBoolean());
   }

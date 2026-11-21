@@ -40,9 +40,11 @@ import org.springframework.web.context.WebApplicationContext;
 /**
  * Security contract for the tenant-facing smart-note endpoints.
  *
- * <p>Reads and creates are open to {@code MEMBER}, {@code TENANT_OWNER} and {@code ADMIN}; edits
- * and deletes require {@code TENANT_OWNER} or {@code ADMIN}. Anonymous callers are rejected; a
- * {@code PLATFORM_ADMIN} caller is forbidden because it carries no tenant authority.
+ * <p>Reads, creates and edits (patch/pin) are open to {@code MEMBER}, {@code TENANT_OWNER} and
+ * {@code ADMIN}; deletes require {@code TENANT_OWNER} or {@code ADMIN}. Author-level ownership of
+ * edits is enforced in {@code VenueSmartNoteServiceImpl} and covered by its unit tests. Anonymous
+ * callers are rejected; a {@code PLATFORM_ADMIN} caller is forbidden because it carries no tenant
+ * authority.
  */
 @SpringBootTest(classes = {CatalogServiceApplication.class})
 @ActiveProfiles("test")
@@ -110,7 +112,7 @@ class VenueSmartNoteRestResourceSecurityTest {
         .andExpect(status().isForbidden());
   }
 
-  // ─── Edit: anonymous rejected, MEMBER forbidden ───────────────────────────
+  // ─── Edit: anonymous rejected, non-tenant authority forbidden ─────────────
 
   @Test
   @DisplayName("Patch smart note rejects an anonymous caller")
@@ -121,9 +123,9 @@ class VenueSmartNoteRestResourceSecurityTest {
   }
 
   @Test
-  @DisplayName("Patch smart note rejects a MEMBER caller")
-  @WithMockUser(authorities = "MEMBER")
-  void patchRejectsMember() throws Exception {
+  @DisplayName("Patch smart note rejects a caller without a tenant authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void patchRejectsNonTenantAuthority() throws Exception {
     mockMvc.perform(patch(BASE_PATH + "/" + UUID_ZERO).header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isForbidden());
@@ -146,7 +148,7 @@ class VenueSmartNoteRestResourceSecurityTest {
         .andExpect(status().isForbidden());
   }
 
-  // ─── Pin toggle: anonymous rejected, MEMBER forbidden ───────────────────
+  // ─── Pin toggle: anonymous rejected, non-tenant authority forbidden ──────
 
   @Test
   @DisplayName("Pin smart note rejects an anonymous caller")
@@ -157,9 +159,9 @@ class VenueSmartNoteRestResourceSecurityTest {
   }
 
   @Test
-  @DisplayName("Pin smart note rejects a MEMBER caller")
-  @WithMockUser(authorities = "MEMBER")
-  void pinRejectsMember() throws Exception {
+  @DisplayName("Pin smart note rejects a caller without a tenant authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void pinRejectsNonTenantAuthority() throws Exception {
     mockMvc.perform(put(BASE_PATH + "/" + UUID_ZERO + "/pinned").header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON).content("{\"pinned\":true}"))
         .andExpect(status().isForbidden());
