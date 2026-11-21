@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 
-import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenueAiSearchProperties;
+import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAiSearchProperties;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,7 +62,7 @@ class VenueEnrichmentAssistantServiceTest {
   @DisplayName("returns not-found when feature flag is disabled")
   void returnsNotFoundWhenDisabled() {
     // Arrange
-    final var properties = new MasterVenueAiSearchProperties(false);
+    final var properties = new VenueAiSearchProperties(false);
     final var service = new VenueEnrichmentAssistantService(venueService, venueTextContentService, chatClientBuilderProvider, properties);
 
     // Act
@@ -78,7 +78,7 @@ class VenueEnrichmentAssistantServiceTest {
   @DisplayName("returns not-found when no chat client is available")
   void returnsNotFoundWhenNoChatClient() {
     // Arrange
-    final var properties = new MasterVenueAiSearchProperties(true);
+    final var properties = new VenueAiSearchProperties(true);
     when(chatClientBuilderProvider.getIfAvailable()).thenReturn(null);
     final var service = new VenueEnrichmentAssistantService(venueService, venueTextContentService, chatClientBuilderProvider, properties);
 

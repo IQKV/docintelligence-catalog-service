@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenueAiSearchProperties;
+import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAiSearchProperties;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,12 +89,12 @@ class VenueEnrichmentAssistantService {
   private final VenueService venueService;
   private final VenueTextContentService venueTextContentService;
   private final ObjectProvider<ChatClient.Builder> chatClientBuilder;
-  private final MasterVenueAiSearchProperties properties;
+  private final VenueAiSearchProperties properties;
 
   VenueEnrichmentAssistantService(final VenueService venueService,
                                   final VenueTextContentService venueTextContentService,
                                   final ObjectProvider<ChatClient.Builder> chatClientBuilder,
-                                  final MasterVenueAiSearchProperties properties) {
+                                  final VenueAiSearchProperties properties) {
     this.venueService = venueService;
     this.venueTextContentService = venueTextContentService;
     this.chatClientBuilder = chatClientBuilder;

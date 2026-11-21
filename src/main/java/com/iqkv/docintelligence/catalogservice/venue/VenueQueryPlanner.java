@@ -22,7 +22,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenueAiSearchProperties;
+import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAiSearchProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -121,10 +121,10 @@ class VenueQueryPlanner {
 
   private final ObjectProvider<ChatClient.Builder> chatClientBuilder;
 
-  private final MasterVenueAiSearchProperties properties;
+  private final VenueAiSearchProperties properties;
 
   VenueQueryPlanner(final ObjectProvider<ChatClient.Builder> chatClientBuilder,
-                    final MasterVenueAiSearchProperties properties) {
+                    final VenueAiSearchProperties properties) {
     this.chatClientBuilder = chatClientBuilder;
     this.properties = properties;
   }

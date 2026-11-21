@@ -27,7 +27,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * catalog falls back to plain vector search.
  */
 @ConfigurationProperties(prefix = "iqkv.catalog.ai-search")
-public record MasterVenueAiSearchProperties(
+public record VenueAiSearchProperties(
     @DefaultValue("true") boolean enabled
 ) {
 }

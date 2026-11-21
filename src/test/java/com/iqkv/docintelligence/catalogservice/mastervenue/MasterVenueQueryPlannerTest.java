@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.stream.IntStream;
 
-import com.iqkv.docintelligence.catalogservice.infrastructure.config.MasterVenueAiSearchProperties;
+import com.iqkv.docintelligence.catalogservice.infrastructure.config.VenueAiSearchProperties;
 import com.iqkv.docintelligence.catalogservice.mastervenue.MasterVenueQueryPlanner.QueryPlan;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -56,13 +56,13 @@ class MasterVenueQueryPlannerTest {
   @Mock
   private ChatClient.CallResponseSpec callResponseSpec;
 
-  private MasterVenueAiSearchProperties properties;
+  private VenueAiSearchProperties properties;
 
   private MasterVenueQueryPlanner planner;
 
   @BeforeEach
   void setUp() {
-    properties = new MasterVenueAiSearchProperties(true);
+    properties = new VenueAiSearchProperties(true);
     planner = new MasterVenueQueryPlanner(chatClientBuilder, properties);
   }
 
@@ -70,7 +70,7 @@ class MasterVenueQueryPlannerTest {
   @DisplayName("plan returns an empty plan without calling the model when planning is disabled")
   void shouldNotCallModelWhenDisabled() {
     // Arrange
-    planner = new MasterVenueQueryPlanner(chatClientBuilder, new MasterVenueAiSearchProperties(false));
+    planner = new MasterVenueQueryPlanner(chatClientBuilder, new VenueAiSearchProperties(false));
     when(chatClientBuilder.getIfAvailable()).thenReturn(builder);
 
     // Act
