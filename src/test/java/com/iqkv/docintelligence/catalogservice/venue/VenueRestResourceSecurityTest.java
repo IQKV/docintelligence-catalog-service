@@ -44,8 +44,9 @@ import org.springframework.web.context.WebApplicationContext;
  * {@code CorrelationIdFilter}, {@code TenantExtractionFilter} and the resource-server chain —
  * runs in the real order. Venue endpoints are member-tier and tenant-scoped: they are not under
  * {@code /admin/} so {@code TenantExtractionFilter} resolves the tenant from the
- * {@code X-Tenant-ID} header or the JWT {@code tenant_id} claim, and the class-level
- * {@code @PreAuthorize("hasAuthority('MEMBER')")} guards every method.
+ * {@code X-Tenant-ID} header or the JWT {@code tenant_id} claim. Reads and the create/update
+ * writes (including {@code /{id}/metadata}) accept {@code MEMBER}, {@code TENANT_OWNER} or
+ * {@code ADMIN}; {@code DELETE} is restricted to {@code TENANT_OWNER} or {@code ADMIN}.
  */
 @SpringBootTest(classes = {CatalogServiceApplication.class})
 @ActiveProfiles("test")
@@ -156,32 +157,41 @@ class VenueRestResourceSecurityTest {
         .andExpect(status().isUnauthorized());
   }
 
-  // ─── Write surface: MEMBER authority is not sufficient ───────────────────
+  // ─── Write surface: non-tenant authorities are rejected ──────────────────
 
   @Test
-  @DisplayName("Create venue rejects a MEMBER caller")
-  @WithMockUser(authorities = "MEMBER")
-  void createRejectsMember() throws Exception {
+  @DisplayName("Create venue rejects a caller without a tenant authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void createRejectsNonTenantAuthority() throws Exception {
     mockMvc.perform(post(TENANT_PATH).header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON).content(JSON_WRITE))
         .andExpect(status().isForbidden());
   }
 
   @Test
-  @DisplayName("Replace venue rejects a MEMBER caller")
-  @WithMockUser(authorities = "MEMBER")
-  void replaceRejectsMember() throws Exception {
+  @DisplayName("Replace venue rejects a caller without a tenant authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void replaceRejectsNonTenantAuthority() throws Exception {
     mockMvc.perform(put(TENANT_PATH + "/" + UUID_ZERO).header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON).content(JSON_WRITE))
         .andExpect(status().isForbidden());
   }
 
   @Test
-  @DisplayName("Patch venue rejects a MEMBER caller")
-  @WithMockUser(authorities = "MEMBER")
-  void patchRejectsMember() throws Exception {
+  @DisplayName("Patch venue rejects a caller without a tenant authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void patchRejectsNonTenantAuthority() throws Exception {
     mockMvc.perform(patch(TENANT_PATH + "/" + UUID_ZERO).header(TENANT_HEADER, TENANT_KEY)
             .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("Update venue metadata rejects a caller without a tenant authority")
+  @WithMockUser(authorities = "PLATFORM_ADMIN")
+  void metadataRejectsNonTenantAuthority() throws Exception {
+    mockMvc.perform(patch(TENANT_PATH + "/" + UUID_ZERO + "/metadata").header(TENANT_HEADER, TENANT_KEY)
+            .contentType(MediaType.APPLICATION_JSON).content("{\"metadata\":\"{}\"}"))
         .andExpect(status().isForbidden());
   }
 

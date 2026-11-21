@@ -46,10 +46,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Tenant-facing venue surface — full CRUD over the tenant's own venue records.
  *
- * <p>Read endpoints ({@code GET}) require {@code MEMBER}, {@code TENANT_OWNER}, or
- * {@code ADMIN} authority. Write endpoints ({@code POST}, {@code PUT}, {@code PATCH},
- * {@code DELETE}) require {@code TENANT_OWNER} or {@code ADMIN} so that ordinary members
- * remain read-only.
+ * <p>Read endpoints ({@code GET}) and write endpoints ({@code POST}, {@code PUT}, {@code PATCH}
+ * — including {@code /{id}/metadata}) require {@code MEMBER}, {@code TENANT_OWNER}, or
+ * {@code ADMIN} authority, so any tenant member may create and update venues. {@code DELETE}
+ * (single and bulk) is restricted to {@code TENANT_OWNER} or {@code ADMIN}.
  *
  * <p>Every response uses the safe projection: curation fields ({@code confidence}, {@code source}
  * and the raw {@code metadata} document) are not exposed. The optional {@code masterVenueId}
@@ -160,10 +160,10 @@ public class VenueRestResource {
     return ResponseEntity.ok(venueService.semanticSearchPublic(q, city, effectiveLimit));
   }
 
-  // ─── Write surface (TENANT_OWNER / ADMIN) ────────────────────────────────
+  // ─── Write surface (MEMBER / TENANT_OWNER / ADMIN; delete owner/admin only) ─
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Create a tenant venue",
       description = "Creates a venue in the active tenant schema. Curation fields (metadata, "
@@ -180,7 +180,7 @@ public class VenueRestResource {
                    content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
       @ApiResponse(responseCode = "403",
-                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content)
+                   description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> create(
       @Valid @RequestBody final VenueDtos.VenuePublicWriteRequest request) {
@@ -188,7 +188,7 @@ public class VenueRestResource {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Replace a tenant venue",
       description = "Full replace of the tenant-visible fields. Curation fields are not "
@@ -203,7 +203,7 @@ public class VenueRestResource {
                    content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
       @ApiResponse(responseCode = "403",
-                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+                   description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content),
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> replace(
@@ -213,7 +213,7 @@ public class VenueRestResource {
   }
 
   @PatchMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Partially update a tenant venue",
       description = "Only the fields present (non-null) in the request are overwritten. "
@@ -227,7 +227,7 @@ public class VenueRestResource {
       @ApiResponse(responseCode = "400", description = "Tenant ID could not be resolved", content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
       @ApiResponse(responseCode = "403",
-                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+                   description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content),
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> patch(
@@ -260,7 +260,7 @@ public class VenueRestResource {
   }
 
   @PatchMapping("/{id}/metadata")
-  @PreAuthorize("hasAnyAuthority('TENANT_OWNER', 'ADMIN')")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
   @Operation(
       summary = "Update tenant venue metadata",
       description = "Replaces the metadata document of the given venue. The request body must "
@@ -277,7 +277,7 @@ public class VenueRestResource {
                    content = @Content),
       @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
       @ApiResponse(responseCode = "403",
-                   description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content),
+                   description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content),
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> patchMetadata(
