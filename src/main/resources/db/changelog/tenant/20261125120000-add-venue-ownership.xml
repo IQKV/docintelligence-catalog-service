@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Add ownership and visibility to the tenant venues table.
+         created_by is the IAM user UUID who created the record — audit trail in org tenants,
+         owner identity in personal workspaces (t_platform schema). Existing rows get NULL,
+         which the application treats as "platform-created / no personal owner".
+         visibility controls catalog-search access: PUBLIC (all org members can read) or
+         PRIVATE (owner + explicit venue_shares grants only). Existing rows default to PUBLIC
+         to preserve the current open-access behaviour. -->
+
+    <changeSet id="20261125120000-add-venue-ownership" author="iqkv">
+
+        <addColumn tableName="venues">
+            <column name="created_by" type="UUID"/>
+        </addColumn>
+
+        <addColumn tableName="venues">
+            <column name="visibility" type="VARCHAR(20)" defaultValue="PUBLIC">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <!-- Covers personal-workspace queries scoped to one owner (findByCreatedBy,
+             searchPersonal, countByCreatedBy). -->
+        <createIndex tableName="venues" indexName="idx_venues_created_by">
+            <column name="created_by"/>
+        </createIndex>
+
+        <!-- Covers visibility-filtered org searches (searchOrg with visibility = 'PUBLIC'). -->
+        <createIndex tableName="venues" indexName="idx_venues_visibility">
+            <column name="visibility"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="venues" indexName="idx_venues_visibility"/>
+            <dropIndex tableName="venues" indexName="idx_venues_created_by"/>
+            <dropColumn tableName="venues" columnName="visibility"/>
+            <dropColumn tableName="venues" columnName="created_by"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

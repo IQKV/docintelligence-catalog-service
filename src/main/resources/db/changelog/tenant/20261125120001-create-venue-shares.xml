@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.33.xsd">
+
+    <!-- Venue collaboration grants — one row per (venue, grantee) pair.
+         Lives in the t_{tenantKey} schema (search_path is set by TenantLiquibaseRunner before
+         these changesets run, so no schemaName is set on the statements below).
+
+         Meaningful primarily in personal workspaces (t_platform schema), where venues default
+         to PRIVATE and are shared explicitly. In org-tenant schemas it grants elevated access
+         (ADMIN or EDITOR) to a specific user beyond the default PUBLIC read.
+
+         venue_id is an app-level FK to venues(id); no DB-level FK is declared because the
+         application enforces the constraint and handles cascade deletion via
+         VenueShareMapper.deleteByVenueId(). No updated_at: a share is replaced rather than
+         updated in place (use updateRole to change the role without deleting). -->
+
+    <changeSet id="20261125120001-create-venue-shares" author="iqkv">
+
+        <createTable tableName="venue_shares">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <!-- App-level FK to t_{tenantKey}.venues. No DB-level FK. -->
+            <column name="venue_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <!-- IAM user UUID of the grantee. -->
+            <column name="shared_with_user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Collaboration role: ADMIN (edit + delete + re-share) or EDITOR (edit only). -->
+            <column name="role" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- IAM user UUID of the user who created this grant. -->
+            <column name="granted_by" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- One grant per (venue, grantee) — prevents duplicate rows and makes access
+             checks a unique-index lookup. -->
+        <addUniqueConstraint tableName="venue_shares"
+                             columnNames="venue_id, shared_with_user_id"
+                             constraintName="uq_venue_shares_venue_user"/>
+
+        <!-- Covers findByVenueId, deleteByVenueId, and updateRole lookups. -->
+        <createIndex tableName="venue_shares" indexName="idx_venue_shares_venue_id">
+            <column name="venue_id"/>
+        </createIndex>
+
+        <!-- Covers findBySharedWithUserId (grantee's shared-with-me view). -->
+        <createIndex tableName="venue_shares" indexName="idx_venue_shares_shared_with_user_id">
+            <column name="shared_with_user_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="venue_shares" indexName="idx_venue_shares_shared_with_user_id"/>
+            <dropIndex tableName="venue_shares" indexName="idx_venue_shares_venue_id"/>
+            <dropTable tableName="venue_shares"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

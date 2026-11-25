@@ -24,5 +24,7 @@
     <include file="db/changelog/tenant/20261118120000-create-venue-chat.xml"/>
     <include file="db/changelog/tenant/20261119120000-add-venue-chat-message-sources.xml"/>
     <include file="db/changelog/tenant/20261120120000-create-venue-smart-notes.xml"/>
+    <include file="db/changelog/tenant/20261125120000-add-venue-ownership.xml"/>
+    <include file="db/changelog/tenant/20261125120001-create-venue-shares.xml"/>
 
 </databaseChangeLog>
