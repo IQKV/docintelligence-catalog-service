@@ -100,7 +100,7 @@ class VenueChatServiceImpl implements VenueChatService {
     // Resolved before anything is persisted, so a venue that is unknown in this tenant's schema
     // leaves no trace of the turn.
     final VenueDtos.VenuePublicResponse venue = request.venueId() == null
-        ? null : venueService.getPublicVenue(request.venueId());
+        ? null : venueService.getPublicVenue(request.venueId(), userId);
 
     final VenueChatSession session = resolveSession(userId, request);
     // Read before the current turn is persisted, so the memory holds the earlier turns only.
@@ -108,7 +108,7 @@ class VenueChatServiceImpl implements VenueChatService {
     final String userContent = truncate(request.content(), properties.maxInputChars());
     insertMessage(session.getId(), MessageRole.USER, userContent, null);
 
-    final GroundedReply reply = reply(userContent, history, venue, session.getModel(), request.persona());
+    final GroundedReply reply = reply(userId, userContent, history, venue, session.getModel(), request.persona());
     return recordReply(session, userContent, reply);
   }
 
@@ -175,7 +175,8 @@ class VenueChatServiceImpl implements VenueChatService {
    * handed to the model as memory. A failed retrieval or model call degrades to
    * {@link #UNAVAILABLE_REPLY} so the conversation continues.
    */
-  private GroundedReply reply(final String userContent,
+  private GroundedReply reply(final UUID userId,
+                              final String userContent,
                               final List<VenueChatMessage> history,
                               final VenueDtos.VenuePublicResponse venue,
                               final String model,
@@ -185,7 +186,7 @@ class VenueChatServiceImpl implements VenueChatService {
     final List<VenueAskDtos.VenueAskSource> sources;
     if (venue == null) {
       final VenueDtos.VenuePublicSemanticSearchResponse search =
-          contextAssembler.retrieveVenues(query, null, GROUNDING_VENUES);
+          contextAssembler.retrieveVenues(query, null, GROUNDING_VENUES, userId);
       context = search.items().isEmpty()
           ? "" : truncate(VenueContextAssembler.renderVenueListBlock(search.items()), properties.maxContextChars());
       // The catalogue path cites venues, not source chunks, so there is nothing to return here.

@@ -72,11 +72,12 @@ class VenueAskServiceImpl implements VenueAskService {
 
   @Override
   public VenueAskDtos.VenueAskResponse askVenue(final UUID venueId,
-                                                final VenueAskDtos.VenueAskRequest request) {
+                                                final VenueAskDtos.VenueAskRequest request,
+                                                final UUID userId) {
     final String question = sanitise(request.question());
     final int maxSources = clamp(request.maxSources(), DEFAULT_MAX_SOURCES, MAX_MAX_SOURCES);
     // Resolves the venue in the active tenant schema; a foreign or unknown id throws here.
-    final VenueDtos.VenuePublicResponse venue = venueService.getPublicVenue(venueId);
+    final VenueDtos.VenuePublicResponse venue = venueService.getPublicVenue(venueId, userId);
     final List<VenueAskDtos.VenueAskSource> sources =
         contextAssembler.retrieveSources(venueId, question, maxSources);
 
@@ -95,17 +96,18 @@ class VenueAskServiceImpl implements VenueAskService {
   }
 
   @Override
-  public VenueAskDtos.VenueContextResponse getVenueContext(final UUID venueId) {
-    return contextAssembler.assemble(venueId);
+  public VenueAskDtos.VenueContextResponse getVenueContext(final UUID venueId, final UUID userId) {
+    return contextAssembler.assemble(venueId, userId);
   }
 
   @Override
-  public VenueAskDtos.VenueListAskResponse askVenues(final VenueAskDtos.VenueListAskRequest request) {
+  public VenueAskDtos.VenueListAskResponse askVenues(final VenueAskDtos.VenueListAskRequest request,
+                                                     final UUID userId) {
     final String question = sanitise(request.question());
     final int limit = clamp(request.limit(), DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
 
     final VenueDtos.VenuePublicSemanticSearchResponse search =
-        contextAssembler.retrieveVenues(question, request.city(), limit);
+        contextAssembler.retrieveVenues(question, request.city(), limit, userId);
     final List<VenueAskDtos.VenueListAskVenue> venues = search.items().stream()
         .map(item -> new VenueAskDtos.VenueListAskVenue(
             item.id(), item.name(), item.city(), item.primaryPhotoUrl(), item.similarity()))

@@ -48,10 +48,18 @@ public interface VenueService {
 
   void deleteVenue(UUID id);
 
+  /**
+   * Lists tenant venues. In a personal workspace the result is scoped to the calling user's own
+   * venues and the ones shared with them, so records from different personal users never mix.
+   */
   VenueDtos.VenueListResponse searchPublicVenues(String search, String city, String sortBy, String sortDir,
-                                                 int limit, int offset);
+                                                 int limit, int offset, UUID userId);
 
-  VenueDtos.VenuePublicResponse getPublicVenue(UUID id);
+  /**
+   * Returns one tenant venue. In a personal workspace the caller must own the venue or hold a
+   * share grant on it.
+   */
+  VenueDtos.VenuePublicResponse getPublicVenue(UUID id, UUID userId);
 
   VenueDtos.VenuePublicResponse createPublicVenue(VenueDtos.VenuePublicWriteRequest request, UUID createdBy);
 
@@ -69,15 +77,21 @@ public interface VenueService {
 
   VenueDtos.VenueSemanticSearchResponse semanticSearch(String query, String city, int limit);
 
-  VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(String query, String city, int limit);
+  /**
+   * Semantic search over tenant venues. In a personal workspace the candidate set is scoped to
+   * the calling user's own venues and the ones shared with them.
+   */
+  VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(String query, String city, int limit,
+                                                                   UUID userId);
 
   // ─── Sharing ──────────────────────────────────────────────────────────────
 
   /**
    * Returns all share grants on the given venue. Throws {@link VenueNotFoundException} when the
-   * venue does not exist.
+   * venue does not exist. In a personal workspace the caller must own the venue or hold a share
+   * grant on it.
    */
-  VenueDtos.VenueShareListResponse getShares(UUID venueId);
+  VenueDtos.VenueShareListResponse getShares(UUID venueId, UUID userId);
 
   /**
    * Grants access to a venue. The caller ({@code grantedBy}) must own the venue or hold an

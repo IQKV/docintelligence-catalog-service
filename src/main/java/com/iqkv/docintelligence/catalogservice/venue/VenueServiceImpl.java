@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.infrastructure.security.TenantKeys;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtoMapper;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import com.iqkv.docintelligence.venue.Venue;
@@ -124,15 +125,26 @@ public class VenueServiceImpl implements VenueService {
 
   @Override
   @Transactional(readOnly = true)
-  public VenueDtos.VenuePublicResponse getPublicVenue(final UUID id) {
-    final Venue venue = requireVenue(id);
+  public VenueDtos.VenuePublicResponse getPublicVenue(final UUID id, final UUID userId) {
+    // In a personal workspace the shared t_platform schema holds every user's venues, so the
+    // caller must own the venue or hold a share grant on it.
+    final Venue venue = TenantKeys.isPersonalWorkspace()
+        ? requireVenueAccessible(id, userId)
+        : requireVenue(id);
     return toPublicResponse(venue);
   }
 
   @Override
   public VenueDtos.VenuePublicResponse createPublicVenue(final VenueDtos.VenuePublicWriteRequest request,
                                                          final UUID createdBy) {
-    final Venue venue = VenueDtoMapper.toPublicEntity(request, createdBy, Venue.VISIBILITY_PUBLIC);
+    // Personal venues are private by default: sharing — not visibility — is what grants access
+    // in a personal workspace, so a client-supplied visibility is ignored there.
+    final boolean personalWorkspace = TenantKeys.isPersonalWorkspace();
+    final Venue venue = VenueDtoMapper.toPublicEntity(request, createdBy,
+        personalWorkspace ? Venue.VISIBILITY_PRIVATE : Venue.VISIBILITY_PUBLIC);
+    if (personalWorkspace) {
+      venue.setVisibility(Venue.VISIBILITY_PRIVATE);
+    }
     // Apply ingestion defaults for curation fields the tenant does not supply.
     venue.setMetadata("{\"_schema_version\":1}");
     venue.setConfidence(BigDecimal.ONE);
@@ -193,9 +205,19 @@ public class VenueServiceImpl implements VenueService {
   @Override
   @Transactional(readOnly = true)
   public VenueDtos.VenueListResponse searchPublicVenues(final String search, final String city,
-                                                         final String sortBy, final String sortDir,
-                                                         final int limit, final int offset) {
-    return searchVenues(search, city, sortBy, sortDir, limit, offset);
+                                                        final String sortBy, final String sortDir,
+                                                        final int limit, final int offset,
+                                                        final UUID userId) {
+    // A personal workspace shares one t_platform schema across every user, so the list must be
+    // scoped to the caller's own venues and the ones shared with them; an organization workspace
+    // has its own schema and lists every venue in it.
+    if (!TenantKeys.isPersonalWorkspace()) {
+      return searchVenues(search, city, sortBy, sortDir, limit, offset);
+    }
+    final var venues = venueMapper.searchPersonal(userId, search, city, sortBy, sortDir, limit, offset);
+    return new VenueDtos.VenueListResponse(
+        venues.stream().map(this::toSummaryView).toList(),
+        venueMapper.countSearchPersonal(userId, search, city));
   }
 
   @Override
@@ -211,10 +233,12 @@ public class VenueServiceImpl implements VenueService {
   @Transactional(readOnly = true)
   public VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(final String query,
                                                                           final String city,
-                                                                          final int limit) {
+                                                                          final int limit,
+                                                                          final UUID userId) {
     log.info("Delegating tenant venue semantic search (safe projection): q='{}', city={}, limit={}",
         query, city, limit);
-    final VenueDtos.VenueSemanticSearchResponse result = semanticSearchService.search(query, city, limit);
+    final VenueDtos.VenueSemanticSearchResponse result =
+        semanticSearchService.search(query, city, limit, userId);
     return new VenueDtos.VenuePublicSemanticSearchResponse(
         result.items().stream().map(VenueDtoMapper::toPublicSemanticResult).toList(),
         result.totalElements(),
@@ -264,8 +288,14 @@ public class VenueServiceImpl implements VenueService {
 
   @Override
   @Transactional(readOnly = true)
-  public VenueDtos.VenueShareListResponse getShares(final UUID venueId) {
-    requireVenue(venueId);
+  public VenueDtos.VenueShareListResponse getShares(final UUID venueId, final UUID userId) {
+    // In a personal workspace the caller must own the venue or hold a grant on it; an unknown id
+    // raises VenueNotFoundException and a foreign one raises AccessDeniedException.
+    if (TenantKeys.isPersonalWorkspace()) {
+      requireVenueAccessible(venueId, userId);
+    } else {
+      requireVenue(venueId);
+    }
     return new VenueDtos.VenueShareListResponse(
         venueShareMapper.findByVenueId(venueId).stream()
             .map(VenueDtoMapper::toShareResponse)

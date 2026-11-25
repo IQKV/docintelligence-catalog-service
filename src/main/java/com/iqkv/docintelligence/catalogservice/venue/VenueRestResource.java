@@ -96,6 +96,7 @@ public class VenueRestResource {
       @ApiResponse(responseCode = "403", description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenueListResponse> search(
+      @AuthenticationPrincipal final Jwt jwt,
       @Parameter(description = "Free-text keyword matched against name, address and city")
       @RequestParam(required = false) final String search,
       @Parameter(description = "Exact city filter, compared case-insensitively")
@@ -108,7 +109,8 @@ public class VenueRestResource {
       @RequestParam(defaultValue = "20") final int limit,
       @Parameter(description = "Zero-based row offset")
       @RequestParam(defaultValue = "0") final int offset) {
-    return ResponseEntity.ok(venueService.searchPublicVenues(search, city, sortBy, sortDir, limit, offset));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.searchPublicVenues(search, city, sortBy, sortDir, limit, offset, userId));
   }
 
   @GetMapping("/{id}")
@@ -129,8 +131,10 @@ public class VenueRestResource {
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> getById(
-      @Parameter(description = "Venue UUID") @PathVariable final UUID id) {
-    return ResponseEntity.ok(venueService.getPublicVenue(id));
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt) {
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.getPublicVenue(id, userId));
   }
 
   @GetMapping("/search/semantic")
@@ -153,6 +157,7 @@ public class VenueRestResource {
       @ApiResponse(responseCode = "403", description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicSemanticSearchResponse> semanticSearch(
+      @AuthenticationPrincipal final Jwt jwt,
       @Parameter(description = "Natural-language search query")
       @RequestParam final String q,
       @Parameter(description = "Optional explicit city filter; overrides the city the planner derives")
@@ -160,7 +165,8 @@ public class VenueRestResource {
       @Parameter(description = "Maximum number of venues to return (capped at 100)")
       @RequestParam(defaultValue = "20") final int limit) {
     final int effectiveLimit = Math.min(limit, 100);
-    return ResponseEntity.ok(venueService.semanticSearchPublic(q, city, effectiveLimit));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.semanticSearchPublic(q, city, effectiveLimit, userId));
   }
 
   // ─── Write surface (MEMBER / TENANT_OWNER / ADMIN; delete owner/admin only) ─
@@ -346,8 +352,10 @@ public class VenueRestResource {
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenueShareListResponse> getShares(
-      @Parameter(description = "Venue UUID") @PathVariable final UUID id) {
-    return ResponseEntity.ok(venueService.getShares(id));
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt) {
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.getShares(id, userId));
   }
 
   @PostMapping("/{id}/shares")

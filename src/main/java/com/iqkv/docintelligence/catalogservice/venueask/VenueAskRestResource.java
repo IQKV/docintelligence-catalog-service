@@ -19,6 +19,7 @@ package com.iqkv.docintelligence.catalogservice.venueask;
 import jakarta.validation.Valid;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.infrastructure.security.JwtClaimNames;
 import com.iqkv.docintelligence.catalogservice.venueask.dto.VenueAskDtos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -31,6 +32,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -83,8 +86,10 @@ public class VenueAskRestResource {
   })
   public ResponseEntity<VenueAskDtos.VenueAskResponse> askVenue(
       @Parameter(description = "Venue UUID") @PathVariable final UUID venueId,
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueAskDtos.VenueAskRequest request) {
-    return ResponseEntity.ok(venueAskService.askVenue(venueId, request));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueAskService.askVenue(venueId, request, userId));
   }
 
   @GetMapping("/{venueId}/context")
@@ -106,8 +111,10 @@ public class VenueAskRestResource {
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<VenueAskDtos.VenueContextResponse> getVenueContext(
-      @Parameter(description = "Venue UUID") @PathVariable final UUID venueId) {
-    return ResponseEntity.ok(venueAskService.getVenueContext(venueId));
+      @Parameter(description = "Venue UUID") @PathVariable final UUID venueId,
+      @AuthenticationPrincipal final Jwt jwt) {
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueAskService.getVenueContext(venueId, userId));
   }
 
   @PostMapping("/ask")
@@ -130,7 +137,9 @@ public class VenueAskRestResource {
       @ApiResponse(responseCode = "403", description = "Access denied — TENANT_OWNER or MEMBER authority required", content = @Content)
   })
   public ResponseEntity<VenueAskDtos.VenueListAskResponse> askVenues(
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueAskDtos.VenueListAskRequest request) {
-    return ResponseEntity.ok(venueAskService.askVenues(request));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueAskService.askVenues(request, userId));
   }
 }

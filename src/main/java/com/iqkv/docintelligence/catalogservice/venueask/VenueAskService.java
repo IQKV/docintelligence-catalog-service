@@ -38,7 +38,7 @@ public interface VenueAskService {
    * @throws EmptyMessageException        when the question carries no visible text
    * @throws PromptInjectionException     when the question is rejected by the prompt-injection guard
    */
-  VenueAskDtos.VenueAskResponse askVenue(UUID venueId, VenueAskDtos.VenueAskRequest request);
+  VenueAskDtos.VenueAskResponse askVenue(UUID venueId, VenueAskDtos.VenueAskRequest request, UUID userId);
 
   /**
    * The full retrieved context of one venue — the same data the ask endpoint grounds on, returned
@@ -47,7 +47,7 @@ public interface VenueAskService {
    * @throws com.iqkv.docintelligence.catalogservice.venue.VenueNotFoundException when the venue
    *     does not exist in the active tenant schema
    */
-  VenueAskDtos.VenueContextResponse getVenueContext(UUID venueId);
+  VenueAskDtos.VenueContextResponse getVenueContext(UUID venueId, UUID userId);
 
   /**
    * Answers a question scoped to the ranked list / grid of venues.
@@ -55,5 +55,5 @@ public interface VenueAskService {
    * @throws EmptyMessageException    when the question carries no visible text
    * @throws PromptInjectionException when the question is rejected by the prompt-injection guard
    */
-  VenueAskDtos.VenueListAskResponse askVenues(VenueAskDtos.VenueListAskRequest request);
+  VenueAskDtos.VenueListAskResponse askVenues(VenueAskDtos.VenueListAskRequest request, UUID userId);
 }

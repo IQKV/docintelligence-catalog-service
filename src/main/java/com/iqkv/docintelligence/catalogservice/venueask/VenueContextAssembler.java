@@ -91,9 +91,9 @@ class VenueContextAssembler {
    * @throws com.iqkv.docintelligence.catalogservice.venue.VenueNotFoundException when the venue
    *     does not exist in the active tenant schema
    */
-  VenueAskDtos.VenueContextResponse assemble(final UUID venueId) {
+  VenueAskDtos.VenueContextResponse assemble(final UUID venueId, final UUID userId) {
     return new VenueAskDtos.VenueContextResponse(
-        venueService.getPublicVenue(venueId),
+        venueService.getPublicVenue(venueId, userId),
         venueTextContentService.listByVenue(venueId),
         venueAssetService.listAssets(venueId));
   }
@@ -130,9 +130,10 @@ class VenueContextAssembler {
    */
   VenueDtos.VenuePublicSemanticSearchResponse retrieveVenues(final String question,
                                                             final String city,
-                                                            final int limit) {
+                                                            final int limit,
+                                                            final UUID userId) {
     try {
-      return venueService.semanticSearchPublic(question, city, limit);
+      return venueService.semanticSearchPublic(question, city, limit, userId);
     } catch (final RuntimeException ex) {
       log.warn("Venue list semantic search failed, degrading to no candidates: {}", ex.getMessage());
       return new VenueDtos.VenuePublicSemanticSearchResponse(List.of(), 0L, emptyFilters());

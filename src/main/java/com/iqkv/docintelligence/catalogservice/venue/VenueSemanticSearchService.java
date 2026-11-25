@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.infrastructure.security.TenantKeys;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import com.iqkv.foundation.mybatis.util.PgVectorTypeHandler;
 import com.iqkv.foundation.tenancy.TenantContext;
@@ -108,7 +109,7 @@ class VenueSemanticSearchService {
 
   /**
    * Runs a semantic search for {@code query} and returns up to {@code limit} results
-   * ranked by cosine similarity descending.
+   * ranked by cosine similarity descending, without any per-user row scoping.
    *
    * @param query natural-language search query
    * @param city  optional explicit city filter; takes precedence over the city the planner
@@ -120,6 +121,31 @@ class VenueSemanticSearchService {
   public VenueDtos.VenueSemanticSearchResponse search(final String query,
                                                       final String city,
                                                       final int limit) {
+    return search(query, city, limit, null);
+  }
+
+  /**
+   * Runs a semantic search for {@code query} and returns up to {@code limit} results
+   * ranked by cosine similarity descending.
+   *
+   * <p>In a personal workspace the candidates are narrowed to the venues the caller owns or holds a
+   * share grant on, so a user never sees another user's personal venue in the vector results. In an
+   * organization workspace the caller's tenant schema already isolates the data, so no row scope is
+   * applied.
+   *
+   * @param query  natural-language search query
+   * @param city   optional explicit city filter; takes precedence over the city the planner
+   *               extracts; {@code null} leaves the decision to the planner
+   * @param limit  maximum number of results to return
+   * @param userId the calling user, used for the personal-workspace row scope; {@code null}
+   *               disables the scope
+   * @return search response with ranked items, a total count of matching venues, and the hard
+   *     filters that were applied
+   */
+  public VenueDtos.VenueSemanticSearchResponse search(final String query,
+                                                      final String city,
+                                                      final int limit,
+                                                      final UUID userId) {
     log.info("Semantic search started: query='{}', city={}, limit={}", query, city, limit);
     final VenueQueryPlanner.QueryPlan plan = queryPlanner.plan(query);
     final String effectiveCity = city != null ? city : plan.city();
@@ -142,17 +168,26 @@ class VenueSemanticSearchService {
     }
 
     final String venuesTable = tenantVenuesTable();
+    // JdbcTemplate bypasses MyBatisSchemaInterceptor, so the search_path is not set here — the row
+    // scope must qualify venue_shares with the active tenant schema explicitly.
+    final Filter scope = TenantKeys.isPersonalWorkspace() && userId != null
+        ? personalScopeFilter(tenantSchema(), userId)
+        : new Filter("", List.of());
     final String searchSelect = SEARCH_SELECT.formatted(venuesTable);
     final String countSelect = "SELECT COUNT(*) FROM " + venuesTable + " WHERE embedding IS NOT NULL";
 
     final List<Binder> binders = new ArrayList<>();
     binders.add((ps, index) -> ps.setObject(index, vectorLiteral, Types.OTHER)); // similarity projection
     binders.addAll(filter.binders());
+    binders.addAll(scope.binders());
     binders.add((ps, index) -> ps.setObject(index, vectorLiteral, Types.OTHER)); // ORDER BY distance
     binders.add((ps, index) -> ps.setInt(index, limit));
 
+    final List<Binder> countBinders = new ArrayList<>(filter.binders());
+    countBinders.addAll(scope.binders());
+
     final List<VenueDtos.VenueSemanticSearchResult> items = jdbcTemplate.query(
-        searchSelect + filter.sql() + SEARCH_ORDER,
+        searchSelect + filter.sql() + scope.sql() + SEARCH_ORDER,
         ps -> bindAll(ps, binders),
         (rs, rowNum) -> {
           final UUID id = UUID.fromString(rs.getString("id"));
@@ -176,8 +211,8 @@ class VenueSemanticSearchService {
     );
 
     final List<Long> counts = jdbcTemplate.query(
-        countSelect + filter.sql(),
-        ps -> bindAll(ps, filter.binders()),
+        countSelect + filter.sql() + scope.sql(),
+        ps -> bindAll(ps, countBinders),
         (rs, rowNum) -> rs.getLong(1));
 
     final VenueDtos.VenueSemanticSearchFilters appliedFilters = new VenueDtos.VenueSemanticSearchFilters(
@@ -324,12 +359,30 @@ class VenueSemanticSearchService {
     return ts != null ? ts.toInstant() : null;
   }
 
-  private String tenantVenuesTable() {
+  private String tenantSchema() {
     final String tenantKey = TenantContext.getCurrentTenant();
     if (tenantKey == null || !SAFE_TENANT_KEY.matcher(tenantKey).matches()) {
       throw new IllegalStateException("No valid tenant context for venue semantic search");
     }
-    return "t_" + tenantKey + ".venues";
+    return "t_" + tenantKey;
+  }
+
+  private String tenantVenuesTable() {
+    return tenantSchema() + ".venues";
+  }
+
+  /**
+   * The personal-workspace row scope: the caller's own venues plus the ones shared with them. The
+   * {@code venue_shares} table is schema-qualified because JdbcTemplate does not set the tenant
+   * {@code search_path}.
+   */
+  private static Filter personalScopeFilter(final String schema, final UUID userId) {
+    final String sql = "\n  AND (created_by = ? OR EXISTS ("
+        + "SELECT 1 FROM " + schema + ".venue_shares"
+        + " WHERE venue_id = venues.id AND shared_with_user_id = ?))";
+    return new Filter(sql, List.of(
+        (ps, index) -> ps.setObject(index, userId, Types.OTHER),
+        (ps, index) -> ps.setObject(index, userId, Types.OTHER)));
   }
 
   /**

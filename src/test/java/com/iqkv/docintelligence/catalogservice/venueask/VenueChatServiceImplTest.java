@@ -118,7 +118,7 @@ class VenueChatServiceImplTest {
     final var request = new VenueChatDtos.SendMessageRequest(null, null,
         "Where can I host a rooftop gala?", null, null);
     when(assistant.model()).thenReturn("llama3.2");
-    when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
+    when(contextAssembler.retrieveVenues(request.content(), null, 10, USER_ID)).thenReturn(noVenues());
     when(assistant.reply(request.content(), "", List.of(), "llama3.2", null)).thenReturn("Try Skyline Roof.");
 
     // Act
@@ -149,7 +149,7 @@ class VenueChatServiceImplTest {
     final var session = session(USER_ID);
     final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "Hello?", null, "concierge");
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
-    when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
+    when(contextAssembler.retrieveVenues(request.content(), null, 10, USER_ID)).thenReturn(noVenues());
     when(assistant.reply(request.content(), "", List.of(), "llama3.2", "concierge")).thenReturn("Hi.");
 
     // Act
@@ -167,7 +167,7 @@ class VenueChatServiceImplTest {
     final var session = session(USER_ID);
     final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "Any update?", null, null);
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
-    when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
+    when(contextAssembler.retrieveVenues(request.content(), null, 10, USER_ID)).thenReturn(noVenues());
     when(assistant.reply(request.content(), "", List.of(), "llama3.2", null)).thenReturn("Yes.");
 
     // Act
@@ -211,7 +211,7 @@ class VenueChatServiceImplTest {
     final var session = session(USER_ID);
     final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, null, "Anything?", null, null);
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
-    when(contextAssembler.retrieveVenues(request.content(), null, 10)).thenReturn(noVenues());
+    when(contextAssembler.retrieveVenues(request.content(), null, 10, USER_ID)).thenReturn(noVenues());
     when(assistant.reply(request.content(), "", List.of(), "llama3.2", null)).thenReturn(null);
 
     // Act
@@ -229,7 +229,7 @@ class VenueChatServiceImplTest {
     final var request = new VenueChatDtos.SendMessageRequest(SESSION_ID, VENUE_ID, "Do you have parking?", null, null);
     when(sessionMapper.findById(SESSION_ID)).thenReturn(Optional.of(session));
     final VenueDtos.VenuePublicResponse venue = venue();
-    when(venueService.getPublicVenue(VENUE_ID)).thenReturn(venue);
+    when(venueService.getPublicVenue(VENUE_ID, USER_ID)).thenReturn(venue);
     final List<VenueAskDtos.VenueAskSource> sources = List.of(new VenueAskDtos.VenueAskSource(
         UUID.randomUUID(), null, "Parking note", "Two levels of parking.", 3, 0.9));
     when(contextAssembler.retrieveSources(VENUE_ID, request.content(), 6)).thenReturn(sources);
@@ -247,7 +247,7 @@ class VenueChatServiceImplTest {
     verify(messageMapper, times(2)).insert(messages.capture());
     assertThat(messages.getAllValues().getLast().getSources())
         .isEqualTo(VenueChatDtoMapper.sourcesToJson(sources));
-    verify(contextAssembler, never()).retrieveVenues(request.content(), null, 10);
+    verify(contextAssembler, never()).retrieveVenues(request.content(), null, 10, USER_ID);
     verify(sessionMapper).update(session);
   }
 
@@ -264,7 +264,7 @@ class VenueChatServiceImplTest {
     when(messageMapper.findRecentBySessionId(SESSION_ID, 8))
         .thenReturn(List.of(earlierAnswer, earlierQuestion));
     final List<VenueChatMessage> history = List.of(earlierQuestion, earlierAnswer);
-    when(contextAssembler.retrieveVenues("And the parking? How big is the hall?", null, 10))
+    when(contextAssembler.retrieveVenues("And the parking? How big is the hall?", null, 10, USER_ID))
         .thenReturn(noVenues());
     when(assistant.reply(request.content(), "", history, "llama3.2", null)).thenReturn("Two levels.");
 
@@ -273,7 +273,7 @@ class VenueChatServiceImplTest {
 
     // Assert
     assertThat(response.reply()).isEqualTo("Two levels.");
-    verify(contextAssembler).retrieveVenues("And the parking? How big is the hall?", null, 10);
+    verify(contextAssembler).retrieveVenues("And the parking? How big is the hall?", null, 10, USER_ID);
     verify(assistant).reply("And the parking?", "", history, "llama3.2", null);
   }
 
@@ -291,7 +291,7 @@ class VenueChatServiceImplTest {
     final VenueChatMessage older = message(MessageRole.USER, "0123456789");
     final VenueChatMessage newest = message(MessageRole.USER, "abcdefghij");
     when(messageMapper.findRecentBySessionId(SESSION_ID, 8)).thenReturn(List.of(newest, older));
-    when(contextAssembler.retrieveVenues("Why? abcdefghij", null, 10)).thenReturn(noVenues());
+    when(contextAssembler.retrieveVenues("Why? abcdefghij", null, 10, USER_ID)).thenReturn(noVenues());
     when(assistant.reply(request.content(), "", List.of(newest), "llama3.2", null)).thenReturn("Because.");
 
     // Act

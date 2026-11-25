@@ -54,6 +54,8 @@ class VenueEnrichmentAssistantServiceTest {
 
   private static final UUID VENUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
+  private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
   private static final VenueDtos.VenueFieldExtractionRequest REQUEST =
       new VenueDtos.VenueFieldExtractionRequest(
           "capacity", "max_total", "Maximum capacity", "number", null, null, null);
@@ -66,7 +68,7 @@ class VenueEnrichmentAssistantServiceTest {
     final var service = new VenueEnrichmentAssistantService(venueService, venueTextContentService, chatClientBuilderProvider, properties);
 
     // Act
-    final var response = service.extract(VENUE_ID, REQUEST);
+    final var response = service.extract(VENUE_ID, REQUEST, USER_ID);
 
     // Assert
     assertThat(response.found()).isFalse();
@@ -83,7 +85,7 @@ class VenueEnrichmentAssistantServiceTest {
     final var service = new VenueEnrichmentAssistantService(venueService, venueTextContentService, chatClientBuilderProvider, properties);
 
     // Act
-    final var response = service.extract(VENUE_ID, REQUEST);
+    final var response = service.extract(VENUE_ID, REQUEST, USER_ID);
 
     // Assert
     assertThat(response.found()).isFalse();

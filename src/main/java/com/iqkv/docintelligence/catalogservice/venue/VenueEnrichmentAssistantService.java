@@ -112,11 +112,13 @@ class VenueEnrichmentAssistantService {
    *
    * @param venueId owning venue — the source row must belong to it
    * @param request the concrete field to fill and the chosen source document
+   * @param userId  the calling user, used to enforce personal-workspace venue ownership
    * @return the extracted value plus verbatim evidence, or {@code found=false}
    */
   public VenueDtos.VenueFieldExtractionResponse extract(
       final UUID venueId,
-      final VenueDtos.VenueFieldExtractionRequest request) {
+      final VenueDtos.VenueFieldExtractionRequest request,
+      final UUID userId) {
 
     final ChatClient.Builder builder = chatClientBuilder.getIfAvailable();
     if (!properties.enabled() || builder == null) {
@@ -125,7 +127,7 @@ class VenueEnrichmentAssistantService {
     }
 
     // Resolves the venue in the active tenant schema — throws VenueNotFoundException when absent.
-    venueService.getPublicVenue(venueId);
+    venueService.getPublicVenue(venueId, userId);
 
     final String sourceText = resolveSourceText(venueId, request.sourceTextId());
     if (sourceText == null || sourceText.isBlank()) {

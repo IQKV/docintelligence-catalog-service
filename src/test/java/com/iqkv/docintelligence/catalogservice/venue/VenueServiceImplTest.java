@@ -34,16 +34,23 @@ import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import com.iqkv.docintelligence.venue.Venue;
 import com.iqkv.docintelligence.venue.VenueMapper;
 import com.iqkv.docintelligence.venue.VenueShareMapper;
+import com.iqkv.foundation.tenancy.TenantContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("VenueServiceImpl Unit Tests")
 class VenueServiceImplTest {
+
+  /** The personal workspace tenant key — shared by every user, so its venues need row scoping. */
+  private static final String PERSONAL_TENANT_KEY = "platform";
+
+  private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
 
   @Mock
   private VenueMapper venueMapper;
@@ -111,7 +118,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.of(savedVenue(id, "Grand Hall")));
     when(venueAssetService.resolvePrimaryPhotoUrl(id)).thenReturn("https://cdn.example.com/grand-hall.jpg");
 
-    final var response = service.getPublicVenue(id);
+    final var response = service.getPublicVenue(id, USER_ID);
 
     assertThat(response.primaryPhotoUrl()).isEqualTo("https://cdn.example.com/grand-hall.jpg");
   }
@@ -227,10 +234,10 @@ class VenueServiceImplTest {
         Instant.now(), Instant.now(), 0.87);
     final VenueDtos.VenueSemanticSearchFilters filters = new VenueDtos.VenueSemanticSearchFilters(
         "Paris", List.of("hotel"), null, null, null, List.of(), null);
-    when(semanticSearchService.search("rooftop", "Paris", 20)).thenReturn(
+    when(semanticSearchService.search("rooftop", "Paris", 20, USER_ID)).thenReturn(
         new VenueDtos.VenueSemanticSearchResponse(List.of(adminResult), 1L, filters));
 
-    final var response = service.semanticSearchPublic("rooftop", "Paris", 20);
+    final var response = service.semanticSearchPublic("rooftop", "Paris", 20, USER_ID);
 
     assertThat(response.items()).hasSize(1);
     assertThat(response.totalElements()).isEqualTo(1L);
@@ -239,6 +246,59 @@ class VenueServiceImplTest {
     assertThat(item.id()).isEqualTo(id);
     assertThat(item.primaryPhotoUrl()).isEqualTo("https://cdn.example.com/grand-hall.jpg");
     assertThat(item.similarity()).isEqualTo(0.87);
+  }
+
+  @Test
+  @DisplayName("searchPublicVenues scopes the list to the caller in a personal workspace")
+  void searchPublicVenuesScopesToCallerInPersonalWorkspace() {
+    final Venue venue = savedVenue(UUID.randomUUID(), "My Hall");
+    when(venueMapper.searchPersonal(USER_ID, "grand", "Paris", "name", "asc", 20, 0))
+        .thenReturn(List.of(venue));
+    when(venueMapper.countSearchPersonal(USER_ID, "grand", "Paris")).thenReturn(1L);
+
+    TenantContext.setCurrentTenant(PERSONAL_TENANT_KEY);
+    try {
+      final var response = service.searchPublicVenues("grand", "Paris", "name", "asc", 20, 0, USER_ID);
+
+      assertThat(response.items()).hasSize(1);
+      assertThat(response.items().get(0).name()).isEqualTo("My Hall");
+      assertThat(response.totalElements()).isEqualTo(1L);
+    } finally {
+      TenantContext.clear();
+    }
+  }
+
+  @Test
+  @DisplayName("getPublicVenue scopes to the caller in a personal workspace")
+  void getPublicVenueScopesToCallerInPersonalWorkspace() {
+    final UUID id = UUID.randomUUID();
+    when(venueMapper.findByIdForUser(id, USER_ID)).thenReturn(Optional.of(savedVenue(id, "My Hall")));
+
+    TenantContext.setCurrentTenant(PERSONAL_TENANT_KEY);
+    try {
+      final var response = service.getPublicVenue(id, USER_ID);
+
+      assertThat(response.id()).isEqualTo(id);
+    } finally {
+      TenantContext.clear();
+    }
+    verify(venueMapper, never()).findById(any(UUID.class));
+  }
+
+  @Test
+  @DisplayName("getPublicVenue denies a venue the caller neither owns nor has shared, in a personal workspace")
+  void getPublicVenueDeniesForeignVenueInPersonalWorkspace() {
+    final UUID id = UUID.randomUUID();
+    when(venueMapper.findByIdForUser(id, USER_ID)).thenReturn(Optional.empty());
+    when(venueMapper.findById(id)).thenReturn(Optional.of(savedVenue(id, "Foreign Hall")));
+
+    TenantContext.setCurrentTenant(PERSONAL_TENANT_KEY);
+    try {
+      assertThatThrownBy(() -> service.getPublicVenue(id, USER_ID))
+          .isInstanceOf(AccessDeniedException.class);
+    } finally {
+      TenantContext.clear();
+    }
   }
 
   private Venue savedVenue(final UUID id, final String name) {

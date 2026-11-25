@@ -103,8 +103,10 @@ public class VenueEnrichmentAssistRestResource {
   })
   public ResponseEntity<VenueDtos.VenueFieldExtractionResponse> extract(
       @Parameter(description = "Owning venue UUID") @PathVariable final UUID venueId,
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueDtos.VenueFieldExtractionRequest request) {
-    return ResponseEntity.ok(enrichmentAssistantService.extract(venueId, request));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(enrichmentAssistantService.extract(venueId, request, userId));
   }
 
   @PostMapping("/apply")
@@ -129,7 +131,7 @@ public class VenueEnrichmentAssistRestResource {
       @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueDtos.VenueEnrichmentApplyRequest request) {
     final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
-    final VenueDtos.VenuePublicResponse venue = venueService.getPublicVenue(venueId);
+    final VenueDtos.VenuePublicResponse venue = venueService.getPublicVenue(venueId, userId);
     final String merged = mergePatches(venue.metadata(), request.patches());
     return ResponseEntity.ok(venueService.patchVenueMetadata(venueId, merged, userId));
   }
