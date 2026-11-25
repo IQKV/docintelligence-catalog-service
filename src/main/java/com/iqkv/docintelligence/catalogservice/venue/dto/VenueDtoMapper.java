@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.venue.Venue;
+import com.iqkv.docintelligence.venue.VenueShare;
 
 /**
  * Static translation between {@link Venue} rows and the venue DTOs — both the admin
@@ -54,6 +55,8 @@ public final class VenueDtoMapper {
         venue.getConfidence(),
         venue.getSource(),
         venue.getMasterVenueId(),
+        venue.getCreatedBy(),
+        venue.getVisibility(),
         venue.getCreatedAt(),
         venue.getUpdatedAt());
   }
@@ -78,6 +81,8 @@ public final class VenueDtoMapper {
   /**
    * Builds a new row from an admin create request, applying an id and the documented defaults.
    * The id is generated here because the schema has no database-side default.
+   * {@code createdBy} is left {@code null} for admin-created records — the admin acts on behalf
+   * of the tenant, not as a named user owner.
    */
   public static Venue toEntity(final VenueDtos.VenueWriteRequest request) {
     final Venue venue = new Venue();
@@ -101,6 +106,7 @@ public final class VenueDtoMapper {
     venue.setConfidence(request.confidence() != null ? request.confidence() : BigDecimal.ONE);
     venue.setSource(request.source());
     venue.setMasterVenueId(request.masterVenueId());
+    venue.setVisibility(request.visibility() != null ? request.visibility() : Venue.VISIBILITY_PUBLIC);
   }
 
   /**
@@ -137,6 +143,9 @@ public final class VenueDtoMapper {
     if (request.masterVenueId() != null) {
       venue.setMasterVenueId(request.masterVenueId());
     }
+    if (request.visibility() != null) {
+      venue.setVisibility(request.visibility());
+    }
   }
 
   // ─── Tenant safe projection ───────────────────────────────────────────────
@@ -145,6 +154,7 @@ public final class VenueDtoMapper {
    * Builds the tenant-facing safe projection — curation fields ({@code metadata},
    * {@code confidence}, {@code source}) are dropped; the optional {@code masterVenueId}
    * relation key and the resolved, time-limited {@code primaryPhotoUrl} are kept.
+   * {@code visibility} is included so the owner can manage sharing state.
    */
   public static VenueDtos.VenuePublicResponse toPublicResponse(final Venue venue, final String primaryPhotoUrl) {
     return new VenueDtos.VenuePublicResponse(
@@ -158,6 +168,7 @@ public final class VenueDtoMapper {
         primaryPhotoUrl,
         venue.getMetadata(),
         venue.getMasterVenueId(),
+        venue.getVisibility(),
         venue.getCreatedAt(),
         venue.getUpdatedAt());
   }
@@ -185,13 +196,17 @@ public final class VenueDtoMapper {
   }
 
   /**
-   * Builds a new tenant venue row from a tenant write request, applying a generated id.
-   * Curation fields are intentionally left null here — the service sets its defaults after
-   * calling this method.
+   * Builds a new tenant venue row from a tenant write request, applying a generated id and
+   * the caller's user id as the owner. Curation fields are intentionally left null here —
+   * the service sets its defaults after calling this method.
    */
-  public static Venue toPublicEntity(final VenueDtos.VenuePublicWriteRequest request) {
+  public static Venue toPublicEntity(final VenueDtos.VenuePublicWriteRequest request,
+                                     final UUID createdBy,
+                                     final String defaultVisibility) {
     final Venue venue = new Venue();
     venue.setId(UUID.randomUUID());
+    venue.setCreatedBy(createdBy);
+    venue.setVisibility(request.visibility() != null ? request.visibility() : defaultVisibility);
     applyPublicWrite(venue, request);
     return venue;
   }
@@ -199,7 +214,8 @@ public final class VenueDtoMapper {
   /**
    * Applies a tenant full-replace: only the tenant-visible fields are overwritten; curation
    * fields ({@code metadata}, {@code confidence}, {@code source}) are left untouched so the
-   * service can preserve the values it set on creation.
+   * service can preserve the values it set on creation. {@code visibility} is updated when
+   * present in the request.
    */
   public static void applyPublicWrite(final Venue venue, final VenueDtos.VenuePublicWriteRequest request) {
     venue.setName(request.name());
@@ -209,6 +225,9 @@ public final class VenueDtoMapper {
     venue.setLocationLat(request.locationLat());
     venue.setLocationLng(request.locationLng());
     venue.setMasterVenueId(request.masterVenueId());
+    if (request.visibility() != null) {
+      venue.setVisibility(request.visibility());
+    }
   }
 
   /**
@@ -237,5 +256,21 @@ public final class VenueDtoMapper {
     if (request.masterVenueId() != null) {
       venue.setMasterVenueId(request.masterVenueId());
     }
+    if (request.visibility() != null) {
+      venue.setVisibility(request.visibility());
+    }
+  }
+
+  /**
+   * Translates a {@link VenueShare} row to its response DTO.
+   */
+  public static VenueDtos.VenueShareResponse toShareResponse(final VenueShare share) {
+    return new VenueDtos.VenueShareResponse(
+        share.getId(),
+        share.getVenueId(),
+        share.getSharedWithUserId(),
+        share.getRole(),
+        share.getGrantedBy(),
+        share.getCreatedAt());
   }
 }

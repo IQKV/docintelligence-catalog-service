@@ -16,6 +16,7 @@
 
 package com.iqkv.docintelligence.catalogservice.venue;
 
+import java.util.List;
 import java.util.UUID;
 
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
@@ -26,6 +27,11 @@ import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
  * <p>Every method that takes an id throws {@link VenueNotFoundException} when the venue does not
  * exist in the active tenant schema. The active tenant schema is set by the controller from the
  * {@code {tenantKey}} path variable before these methods are called.
+ *
+ * <p>Ownership-sensitive operations ({@link #deletePublicVenue}, {@link #deletePublicVenues},
+ * {@link #addShare}, {@link #updateShareRole}, {@link #removeShare}) require the requesting user's
+ * id so the service can enforce that only the owner or an ADMIN grantee may act. Admin-surface
+ * methods bypass these checks.
  */
 public interface VenueService {
 
@@ -47,19 +53,49 @@ public interface VenueService {
 
   VenueDtos.VenuePublicResponse getPublicVenue(UUID id);
 
-  VenueDtos.VenuePublicResponse createPublicVenue(VenueDtos.VenuePublicWriteRequest request);
+  VenueDtos.VenuePublicResponse createPublicVenue(VenueDtos.VenuePublicWriteRequest request, UUID createdBy);
 
-  VenueDtos.VenuePublicResponse replacePublicVenue(UUID id, VenueDtos.VenuePublicWriteRequest request);
+  VenueDtos.VenuePublicResponse replacePublicVenue(UUID id, VenueDtos.VenuePublicWriteRequest request,
+                                                   UUID requestingUserId);
 
-  VenueDtos.VenuePublicResponse patchPublicVenue(UUID id, VenueDtos.VenuePublicPatchRequest request);
+  VenueDtos.VenuePublicResponse patchPublicVenue(UUID id, VenueDtos.VenuePublicPatchRequest request,
+                                                 UUID requestingUserId);
 
-  VenueDtos.VenuePublicResponse patchVenueMetadata(UUID id, String metadata);
+  VenueDtos.VenuePublicResponse patchVenueMetadata(UUID id, String metadata, UUID requestingUserId);
 
-  void deletePublicVenue(UUID id);
+  void deletePublicVenue(UUID id, UUID requestingUserId);
 
-  void deletePublicVenues(java.util.List<UUID> ids);
+  void deletePublicVenues(List<UUID> ids, UUID requestingUserId);
 
   VenueDtos.VenueSemanticSearchResponse semanticSearch(String query, String city, int limit);
 
   VenueDtos.VenuePublicSemanticSearchResponse semanticSearchPublic(String query, String city, int limit);
+
+  // ─── Sharing ──────────────────────────────────────────────────────────────
+
+  /**
+   * Returns all share grants on the given venue. Throws {@link VenueNotFoundException} when the
+   * venue does not exist.
+   */
+  VenueDtos.VenueShareListResponse getShares(UUID venueId);
+
+  /**
+   * Grants access to a venue. The caller ({@code grantedBy}) must own the venue or hold an
+   * {@code ADMIN} share grant; otherwise throws {@link org.springframework.security.access.AccessDeniedException}.
+   * Throws {@link VenueNotFoundException} when the venue does not exist.
+   */
+  VenueDtos.VenueShareResponse addShare(UUID venueId, VenueDtos.VenueShareRequest request, UUID grantedBy);
+
+  /**
+   * Changes the role of an existing share grant. Same ownership rules as {@link #addShare}.
+   * Throws {@link VenueShareNotFoundException} when no grant exists for that user.
+   */
+  VenueDtos.VenueShareResponse updateShareRole(UUID venueId, UUID sharedWithUserId, String role,
+                                               UUID requestingUserId);
+
+  /**
+   * Revokes a share grant. Same ownership rules as {@link #addShare}.
+   * Throws {@link VenueShareNotFoundException} when no grant exists for that user.
+   */
+  void removeShare(UUID venueId, UUID sharedWithUserId, UUID requestingUserId);
 }

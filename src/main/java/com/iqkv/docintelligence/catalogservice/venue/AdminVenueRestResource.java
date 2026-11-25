@@ -274,7 +274,7 @@ public class AdminVenueRestResource {
       @Valid @RequestBody final VenueDtos.VenueMetadataPatchRequest request) {
     try {
       TenantContext.setCurrentTenant(tenantKey);
-      return ResponseEntity.ok(venueService.patchVenueMetadata(id, request.metadata()));
+      return ResponseEntity.ok(venueService.patchVenueMetadata(id, request.metadata(), null));
     } finally {
       TenantContext.clear();
     }
@@ -300,7 +300,7 @@ public class AdminVenueRestResource {
       @Valid @RequestBody final VenueDtos.VenueBulkDeleteRequest request) {
     try {
       TenantContext.setCurrentTenant(tenantKey);
-      venueService.deletePublicVenues(request.ids());
+      venueService.deletePublicVenues(request.ids(), null);
       return ResponseEntity.noContent().build();
     } finally {
       TenantContext.clear();

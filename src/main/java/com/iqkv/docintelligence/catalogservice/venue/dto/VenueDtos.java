@@ -18,6 +18,7 @@ package com.iqkv.docintelligence.catalogservice.venue.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -49,6 +50,8 @@ public final class VenueDtos {
       BigDecimal confidence,
       String source,
       UUID masterVenueId,
+      UUID createdBy,
+      String visibility,
       Instant createdAt,
       Instant updatedAt) {
   }
@@ -83,7 +86,8 @@ public final class VenueDtos {
    *
    * <p>{@code metadata} and {@code confidence} are optional: a create falls back to the canonical
    * empty metadata document and full confidence. {@code masterVenueId} is optional — the tenant
-   * venue is not linked to a master record when it is {@code null}.
+   * venue is not linked to a master record when it is {@code null}. {@code visibility} defaults to
+   * {@link com.iqkv.docintelligence.venue.Venue#VISIBILITY_PUBLIC} when {@code null}.
    */
   public record VenueWriteRequest(
       @NotBlank String name,
@@ -95,7 +99,8 @@ public final class VenueDtos {
       String metadata,
       BigDecimal confidence,
       @NotBlank String source,
-      UUID masterVenueId) {
+      UUID masterVenueId,
+      String visibility) {
   }
 
   /**
@@ -113,7 +118,8 @@ public final class VenueDtos {
       String metadata,
       BigDecimal confidence,
       String source,
-      UUID masterVenueId) {
+      UUID masterVenueId,
+      String visibility) {
   }
 
   /**
@@ -121,7 +127,9 @@ public final class VenueDtos {
    * {@code PUT /api/v1/catalog/venues/{id}} (full replace). Carries only the fields a tenant may
    * manage — curation fields ({@code metadata}, {@code confidence}, {@code source}) are not
    * accepted; the service applies ingestion defaults on create and leaves them untouched on
-   * replace.
+   * replace. {@code visibility} defaults to the context-appropriate value when {@code null}:
+   * {@link com.iqkv.docintelligence.venue.Venue#VISIBILITY_PUBLIC} for org tenants,
+   * {@link com.iqkv.docintelligence.venue.Venue#VISIBILITY_PRIVATE} for personal workspaces.
    */
   public record VenuePublicWriteRequest(
       @NotBlank String name,
@@ -130,7 +138,8 @@ public final class VenueDtos {
       String city,
       BigDecimal locationLat,
       BigDecimal locationLng,
-      UUID masterVenueId) {
+      UUID masterVenueId,
+      String visibility) {
   }
 
   /**
@@ -156,7 +165,8 @@ public final class VenueDtos {
       String city,
       BigDecimal locationLat,
       BigDecimal locationLng,
-      UUID masterVenueId) {
+      UUID masterVenueId,
+      String visibility) {
   }
 
   /**
@@ -165,7 +175,8 @@ public final class VenueDtos {
    * tenants can read and edit their own venue metadata document via the structured editor.
    * The optional {@code masterVenueId} relation key is kept so a member can see whether the
    * venue is linked to a master catalog entry, and the denormalised {@code primaryPhotoUrl}
-   * lets a caller render a thumbnail without loading the asset list.
+   * lets a caller render a thumbnail without loading the asset list. {@code visibility} is
+   * exposed so the owner can see and manage the sharing state of their venue.
    */
   public record VenuePublicResponse(
       UUID id,
@@ -178,6 +189,7 @@ public final class VenueDtos {
       String primaryPhotoUrl,
       String metadata,
       UUID masterVenueId,
+      String visibility,
       Instant createdAt,
       Instant updatedAt) {
   }
@@ -330,5 +342,35 @@ public final class VenueDtos {
       String value,
       String evidence,
       boolean found) {
+  }
+
+  // ─── Sharing ──────────────────────────────────────────────────────────────
+
+  /**
+   * Request body for granting or updating a venue share. {@code role} must be one of
+   * {@link com.iqkv.docintelligence.venue.VenueShare#ROLE_ADMIN} or
+   * {@link com.iqkv.docintelligence.venue.VenueShare#ROLE_EDITOR}.
+   */
+  public record VenueShareRequest(
+      @NotNull UUID sharedWithUserId,
+      @NotBlank String role) {
+  }
+
+  /**
+   * View of one {@code venue_shares} row returned to the caller.
+   */
+  public record VenueShareResponse(
+      UUID id,
+      UUID venueId,
+      UUID sharedWithUserId,
+      String role,
+      UUID grantedBy,
+      java.time.Instant createdAt) {
+  }
+
+  /**
+   * All share grants on one venue.
+   */
+  public record VenueShareListResponse(List<VenueShareResponse> items) {
   }
 }

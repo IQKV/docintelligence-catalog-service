@@ -162,6 +162,6 @@ class VenueAskServiceImplTest {
   private static VenueDtos.VenuePublicResponse venue() {
     return new VenueDtos.VenuePublicResponse(
         VENUE_ID, "Test Venue", "A description", "1 Test St", "Testville",
-        null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null);
   }
 }

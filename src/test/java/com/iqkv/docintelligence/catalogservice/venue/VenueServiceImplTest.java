@@ -33,6 +33,7 @@ import java.util.UUID;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import com.iqkv.docintelligence.venue.Venue;
 import com.iqkv.docintelligence.venue.VenueMapper;
+import com.iqkv.docintelligence.venue.VenueShareMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,8 @@ class VenueServiceImplTest {
   @Mock
   private VenueMapper venueMapper;
   @Mock
+  private VenueShareMapper venueShareMapper;
+  @Mock
   private VenueAssetService venueAssetService;
   @Mock
   private VenueEmbeddingService embeddingService;
@@ -57,7 +60,7 @@ class VenueServiceImplTest {
 
   @BeforeEach
   void setUp() {
-    service = new VenueServiceImpl(venueMapper, venueAssetService, embeddingService, semanticSearchService);
+    service = new VenueServiceImpl(venueMapper, venueShareMapper, venueAssetService, embeddingService, semanticSearchService);
   }
 
   @Test
@@ -142,7 +145,7 @@ class VenueServiceImplTest {
 
     final var response = service.createVenue(new VenueDtos.VenueWriteRequest(
         "Grand Hall", null, "1 Rue", "Paris", new BigDecimal("48.856614"), new BigDecimal("2.352221"),
-        null, null, "MANUAL", null));
+        null, null, "MANUAL", null, null));
 
     verify(venueMapper).insert(any(Venue.class));
     assertThat(response.name()).isEqualTo("Grand Hall");
@@ -156,7 +159,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.of(existing));
 
     service.replaceVenue(id, new VenueDtos.VenueWriteRequest(
-        "Grand Hall", null, "1 Rue", "Paris", null, null, null, null, "MANUAL", null));
+        "Grand Hall", null, "1 Rue", "Paris", null, null, null, null, "MANUAL", null, null));
 
     verify(venueMapper).update(existing);
     assertThat(existing.getName()).isEqualTo("Grand Hall");
@@ -170,7 +173,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.replaceVenue(id, new VenueDtos.VenueWriteRequest(
-        "Grand Hall", null, null, null, null, null, null, null, "MANUAL", null)))
+        "Grand Hall", null, null, null, null, null, null, null, "MANUAL", null, null)))
         .isInstanceOf(VenueNotFoundException.class);
     verify(venueMapper, never()).update(any(Venue.class));
   }
@@ -183,7 +186,7 @@ class VenueServiceImplTest {
     when(venueMapper.findById(id)).thenReturn(Optional.of(existing));
 
     service.patchVenue(id, new VenueDtos.VenuePatchRequest(
-        "New Name", null, null, null, null, null, null, null, null, null));
+        "New Name", null, null, null, null, null, null, null, null, null, null));
 
     verify(venueMapper).update(existing);
     assertThat(existing.getName()).isEqualTo("New Name");

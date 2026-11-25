@@ -391,7 +391,7 @@ class VenueChatServiceImplTest {
 
   private static VenueDtos.VenuePublicResponse venue() {
     return new VenueDtos.VenuePublicResponse(VENUE_ID, "Skyline Roof", "Rooftop events", "1 High St",
-        "Berlin", null, null, null, null, null, Instant.now(), Instant.now());
+        "Berlin", null, null, null, null, null, null, Instant.now(), Instant.now());
   }
 
   private static VenueChatSession session(final UUID userId) {

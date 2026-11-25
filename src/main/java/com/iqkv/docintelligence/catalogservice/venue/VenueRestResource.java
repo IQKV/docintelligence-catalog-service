@@ -19,6 +19,7 @@ package com.iqkv.docintelligence.catalogservice.venue;
 import jakarta.validation.Valid;
 import java.util.UUID;
 
+import com.iqkv.docintelligence.catalogservice.infrastructure.security.JwtClaimNames;
 import com.iqkv.docintelligence.catalogservice.venue.dto.VenueDtos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +33,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -183,8 +186,10 @@ public class VenueRestResource {
                    description = "Access denied — MEMBER, TENANT_OWNER or ADMIN authority required", content = @Content)
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> create(
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueDtos.VenuePublicWriteRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(venueService.createPublicVenue(request));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.status(HttpStatus.CREATED).body(venueService.createPublicVenue(request, userId));
   }
 
   @PutMapping("/{id}")
@@ -208,8 +213,10 @@ public class VenueRestResource {
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> replace(
       @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueDtos.VenuePublicWriteRequest request) {
-    return ResponseEntity.ok(venueService.replacePublicVenue(id, request));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.replacePublicVenue(id, request, userId));
   }
 
   @PatchMapping("/{id}")
@@ -232,8 +239,10 @@ public class VenueRestResource {
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> patch(
       @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt,
       @RequestBody final VenueDtos.VenuePublicPatchRequest request) {
-    return ResponseEntity.ok(venueService.patchPublicVenue(id, request));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.patchPublicVenue(id, request, userId));
   }
 
   @DeleteMapping("/{id}")
@@ -254,8 +263,10 @@ public class VenueRestResource {
       @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
   })
   public ResponseEntity<Void> delete(
-      @Parameter(description = "Venue UUID") @PathVariable final UUID id) {
-    venueService.deletePublicVenue(id);
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt) {
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    venueService.deletePublicVenue(id, userId);
     return ResponseEntity.noContent().build();
   }
 
@@ -282,8 +293,10 @@ public class VenueRestResource {
   })
   public ResponseEntity<VenueDtos.VenuePublicResponse> patchMetadata(
       @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueDtos.VenueMetadataPatchRequest request) {
-    return ResponseEntity.ok(venueService.patchVenueMetadata(id, request.metadata()));
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.patchVenueMetadata(id, request.metadata(), userId));
   }
 
   @DeleteMapping
@@ -307,8 +320,116 @@ public class VenueRestResource {
                    description = "Access denied — TENANT_OWNER or ADMIN authority required", content = @Content)
   })
   public ResponseEntity<Void> deleteBulk(
+      @AuthenticationPrincipal final Jwt jwt,
       @Valid @RequestBody final VenueDtos.VenueBulkDeleteRequest request) {
-    venueService.deletePublicVenues(request.ids());
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    venueService.deletePublicVenues(request.ids(), userId);
+    return ResponseEntity.noContent().build();
+  }
+
+  // ─── Share sub-resource ──────────────────────────────────────────────────
+
+  @GetMapping("/{id}/shares")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "List share grants on a venue",
+      description = "Returns all users the venue has been shared with and their roles. "
+                    + "Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Share grants for the venue",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenueShareListResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied", content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenueShareListResponse> getShares(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id) {
+    return ResponseEntity.ok(venueService.getShares(id));
+  }
+
+  @PostMapping("/{id}/shares")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Share a venue with a user",
+      description = "Grants the given user access to the venue with the specified role. "
+                    + "Only the venue owner or an ADMIN grantee may call this. "
+                    + "Role must be ADMIN or EDITOR. Responds 404 when the venue does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "201", description = "Share grant created",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenueShareResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Validation error", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — owner or ADMIN grantee required",
+                   content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenueShareResponse> addShare(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @AuthenticationPrincipal final Jwt jwt,
+      @Valid @RequestBody final VenueDtos.VenueShareRequest request) {
+    final UUID userId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.status(HttpStatus.CREATED).body(venueService.addShare(id, request, userId));
+  }
+
+  @PatchMapping("/{id}/shares/{userId}")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Update a share grant role",
+      description = "Changes the role of an existing share grant. "
+                    + "Only the venue owner or an ADMIN grantee may call this. "
+                    + "Responds 404 when the venue or the grant does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "Share grant updated",
+                   content = @Content(schema = @Schema(implementation = VenueDtos.VenueShareResponse.class))),
+      @ApiResponse(responseCode = "400", description = "Validation error", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — owner or ADMIN grantee required",
+                   content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue or share grant not found", content = @Content)
+  })
+  public ResponseEntity<VenueDtos.VenueShareResponse> updateShareRole(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @Parameter(description = "UUID of the user whose grant is being updated")
+      @PathVariable final UUID userId,
+      @AuthenticationPrincipal final Jwt jwt,
+      @Valid @RequestBody final VenueDtos.VenueShareRequest request) {
+    final UUID requestingUserId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    return ResponseEntity.ok(venueService.updateShareRole(id, userId, request.role(), requestingUserId));
+  }
+
+  @DeleteMapping("/{id}/shares/{userId}")
+  @PreAuthorize("hasAnyAuthority('MEMBER', 'TENANT_OWNER', 'ADMIN')")
+  @Operation(
+      summary = "Revoke a share grant",
+      description = "Removes the share grant for the given user on the given venue. "
+                    + "Only the venue owner or an ADMIN grantee may call this. "
+                    + "Responds 404 when the venue or the grant does not exist.")
+  @Parameter(name = "X-Tenant-ID", in = ParameterIn.HEADER, required = false,
+             description = "8-char alphanumeric tenant key. "
+                           + "Can be omitted when the JWT carries a tenant_id claim.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "Share grant revoked", content = @Content),
+      @ApiResponse(responseCode = "401", description = "Missing or invalid JWT", content = @Content),
+      @ApiResponse(responseCode = "403", description = "Access denied — owner or ADMIN grantee required",
+                   content = @Content),
+      @ApiResponse(responseCode = "404", description = "Venue or share grant not found", content = @Content)
+  })
+  public ResponseEntity<Void> removeShare(
+      @Parameter(description = "Venue UUID") @PathVariable final UUID id,
+      @Parameter(description = "UUID of the user whose grant is being revoked")
+      @PathVariable final UUID userId,
+      @AuthenticationPrincipal final Jwt jwt) {
+    final UUID requestingUserId = UUID.fromString(jwt.getClaimAsString(JwtClaimNames.USER_ID));
+    venueService.removeShare(id, userId, requestingUserId);
     return ResponseEntity.noContent().build();
   }
 }
